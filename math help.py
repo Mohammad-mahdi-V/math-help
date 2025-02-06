@@ -327,6 +327,10 @@ class App():
         if self.set_name.get().islower():
             messagebox.showwarning("warning", "که وارد کردید به حروف بزرگ تبدیل شد")
             self.set_name.set(self.set_name.get().strip().upper())
+        self.set_info_page()
+    def set_info_page(self):
+        partitions=SetsAlgorithm.partitions(eval(self.set.get()))
+        
 
 App(tk.Tk())
 tk.mainloop()
