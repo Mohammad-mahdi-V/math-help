@@ -7,8 +7,8 @@ import tkinter.ttk as ttk
 import sv_ttk as sttk
 from venn import venn
 import darkdetect
-
-
+from tkinter import messagebox
+import re
 class SetsAlgorithm:
     def __init__(self, set_of_sets):
         if isinstance(set_of_sets, dict):
@@ -290,11 +290,13 @@ class App():
         entry_label.pack(side="right", fill="none", expand=False, pady=10 ,padx=10)
         name_label=ttk.Label(freame_entery_name,text="نام مجموعه را وارد کنید",font=("B Morvarid", 15))
         name_label.pack(side="right", fill="none", expand=False, pady=10)
-        self.sets_entry = ttk.Entry(freame_entery_set_entry, font=("B Morvarid", 20))
+        self.set=tk.StringVar()
+        self.set_name=tk.StringVar()
+        self.sets_entry = ttk.Entry(freame_entery_set_entry, font=("B Morvarid", 20),textvariable=self.set)
         self.sets_entry.pack(side="top", fill="x", expand=True, padx=10, pady=10,ipadx=5,ipady=5)
-        self.sets_entry_name=ttk.Entry(freame_entery_name, font=("B Morvarid", 20))
+        self.sets_entry_name=ttk.Entry(freame_entery_name, font=("B Morvarid", 20),textvariable=self.set_name,validate="key",validatecommand=(self.root.register(lambda text:len(text)<=1),"%P"))
         self.sets_entry_name.pack(side="top", fill="x", expand=True, padx=10, pady=10,ipadx=5,ipady=5)
-        next_button = ttk.Button(self.root, text="بعدی", command=self.set_section_next)
+        next_button = ttk.Button(self.root, text="بعدی", command=self.check_entry)
         next_button.pack(side="bottom", fill="x", expand=True, padx=20, pady=10)
         scroolbar_set_entery = ttk.Scrollbar(freame_entery_set_entry, orient="horizontal", command=self.sets_entry.xview)
         self.sets_entry.config(xscrollcommand=scroolbar_set_entery.set)
@@ -304,9 +306,27 @@ class App():
             sttk.use_light_theme()
         elif sttk.get_theme() == "light":
             sttk.use_dark_theme()
-    def set_section_next():
-        pass
+    def check_entry(self):
+        pattern = r"^\{\s*(\d+\s*(,\s*\d+\s*)*)?\}$"
+        entry_value = self.set.get().strip() 
+    
+        if not entry_value.startswith("{") or not entry_value.endswith("}"):
+            messagebox.showerror("ERROR", "وارد شده باید با { شروع شود و با } به اتمام برسد")
+            return
+        
+        content = entry_value[1:-1].strip()
+        
+        if content and not re.fullmatch(pattern, entry_value):
+            messagebox.showerror(" ERROR ", " اعضای مجموعه باید فقط از اعداد تشکیل شده و با کاما جدا شوند!")
+            return 
+        
+        if not self.set_name.get() or self.set_name.get().isdigit():
+            messagebox.showerror("ERROR", "نمیتوانید نام مجموعه را خالی بگذارید یا عدد وارد کنید")
+            return
+        
+        if self.set_name.get().islower():
+            messagebox.showwarning("warning", "که وارد کردید به حروف بزرگ تبدیل شد")
+            self.set_name.set(self.set_name.get().strip().upper())
 
 App(tk.Tk())
 tk.mainloop()
-....
