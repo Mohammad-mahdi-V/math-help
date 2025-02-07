@@ -39,13 +39,13 @@ class SetsAlgorithm:
 
     @staticmethod
     def partitions(given_set):
-        if len(given_set)<=6:
+        if len(given_set)<=5:
             return list(more_itertools.set_partitions(given_set))
         else:
             partition_list=[]
             partition_loop=0
             for partition in more_itertools.set_partitions(given_set):
-                if partition_loop<=201:
+                if partition_loop<=100:
                     partition_list.append(partition) 
                     partition_loop+=1
                 else:
