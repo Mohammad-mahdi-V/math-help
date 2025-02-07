@@ -329,7 +329,13 @@ class App():
             self.set_name.set(self.set_name.get().strip().upper())
         self.set_info_page()
     def set_info_page(self):
-        partitions=SetsAlgorithm.partitions(eval(self.set.get()))
+        set=eval(self.set.get())
+        set_name=self.set_name.get()
+        print(set)
+        set_oop=SetsAlgorithm({f"{set_name}":set})
+        partitions=set_oop.partitions(set)
+        subsets=set_oop.subsets_one_set(set)        
+        len_set=len(set)
         
 
 App(tk.Tk())
