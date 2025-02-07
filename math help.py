@@ -368,9 +368,7 @@ class App():
         tree_viwe_par.column("#0", width=50)
         tree_viwe_par.column("par", width=100)
         for i, partition in enumerate(partitions):
-            # تبدیل لیست به رشته و تغییر `[]` به `{}` برای نمایش
             partition_str = " , ".join([f"{{{', '.join(map(str, subset))}}}" for subset in partition])
-            # پوشاندن کل پارتیشن‌ها با `{}` 
             partition_str = f"{{{{{partition_str}}}}}"
             
             tree_viwe_par.insert("", "end", text=str(i+1), values=( partition_str))
