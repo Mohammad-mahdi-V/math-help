@@ -23,13 +23,19 @@ class SetsAlgorithm:
 
     @staticmethod
     def subsets_one_set(given_set):
-        num_sub = 2 ** len(given_set)
-        subsets_dict = {f" زیرمجموعه{i}عضوی": [] for i in range(len(given_set) + 1)}
+        num_loop=0
+        if len(given_set)>=11:
+            subsets_dict = {f" زیرمجموعه{i}عضوی": [] for i in range(11)}
+        else:
+            subsets_dict = {f" زیرمجموعه{i}عضوی": [] for i in range(len(given_set)+1)}
+
         for i in range(len(given_set) + 1):
+            if num_loop>10:
+                break
             for subset in itertools.combinations(given_set, i):
                 subsets_dict[f" زیرمجموعه{i}عضوی"].append(subset)
+            num_loop+=1
         return subsets_dict
-
     def subsets_all_sets(self):
         self.subsets_all = {}
         num_of_set = 1
@@ -352,16 +358,40 @@ class App():
         information_frame.pack(side="top", fill="both", expand=True, padx=10, pady=10)
         information_set=tk.Frame(information_frame)
         information_set.pack(side="top",fill="both",expand=True,padx=10,pady=10)
+        tab_info=ttk.Notebook(information_frame)
+        tab_info.pack(side="bottom",fill="both",expand=True,padx=10,pady=10)
+        if self.advance_var.get():
+            sets_calc_frame=tk.Frame(information_set)
+            sets_calc_frame.pack(side="bottom",fill="both",expand=True)
+            calc_label=ttk.Label(sets_calc_frame,text="برای محاسبه اعمال مجموعه عبارت مورد نظر را وارد کنید ",font=("B Morvarid",20),justify="center")
+            calc_label.pack(side="top",fill="y",expand=True,padx=10)
+            self.calc_var=tk.StringVar()
+            entry_frame=tk.Frame(sets_calc_frame)
+            entry_frame.pack(side="top",expand=True,fill="x")
+            calc_entry=ttk.Entry(entry_frame,font=("B Morvarid",20),textvariable=self.calc_var)
+            calc_entry.pack(side="right",expand=True,fill="both",padx=10,pady=10 ,ipadx=10 ,ipady=10)
+            ruselt_frame=tk.Frame(sets_calc_frame)
+            ruselt_frame.pack(side="top",expand=True,fill="both")
+            ruselt_label_part_1=ttk.Label(ruselt_frame,text=": جواب",font=("B Morvarid",20))
+            ruselt_label_part_1.pack(side="right",expand=True,fill="y")
+            ruselt_label_part_2=ttk.Label(ruselt_frame,text="...در انتظار دریافت عبارت",font=("B Morvarid",20))
+            ruselt_label_part_2.pack(side="left",expand=True,fill="y")
+            calc_btn=ttk.Button(entry_frame,text="محاسبه",command=self.calc_metod)
+            calc_btn.pack(side="left",expand=True,fill="both",padx=10 ,pady=10)
+            tab_info.pack(side="right",fill="both",expand=True,padx=10,pady=10)
+            information_set.pack(side="left",fill="both",expand=True,padx=10,pady=10)
+        else:
+            tab_info.pack(side="bottom",fill="both",expand=True,padx=10,pady=10)
+            information_set.pack(side="top",fill="both",expand=True,padx=10,pady=10)
         name_label=ttk.Label(information_set,text=f"{set_name} : نام مجموعه ",font=("B Morvarid",15))
         name_label.pack(side="right",fill="none",expand=True,padx=10)
         set_label=ttk.Label(information_set,text=f"{set} : اعضای مجموعه ",font=("B Morvarid",15))
         set_label.pack(side="left",fill="none",expand=True,padx=10)
         set_len=ttk.Label(information_set,text=f"{len(set)} :  طول مجموعه ",font=("B Morvarid",15))
         set_len.pack(side="bottom",fill="none",padx=10,pady=10)
-        tab_info=ttk.Notebook(information_frame)
-        tab_info.pack(side="bottom",fill="both",expand=True,padx=10,pady=10)
         partition_frame=tk.Frame(tab_info)
         subset_frame=tk.Frame(tab_info)
+        tab_info.config(height=275)
         tab_info.add(partition_frame,text="افراز ها")
         tab_info.add(subset_frame,text="زیر مجموعه ها")
         tree_viwe_par=ttk.Treeview(partition_frame,columns=("par"))
@@ -379,7 +409,9 @@ class App():
         tree_viwe_par.config(yscrollcommand=scrollbar.set)
         
         tree_viwe_par.pack(side="left", fill="both", expand=True)
-        set_len=ttk.Label(subset_frame,text=f"تعداد زیر مجموعه ها : {2**len(set)}",font=("B Morvarid",15))
+        set_len=ttk.Label(subset_frame,text=f"تعداد کل زیر مجموعه ها : {2**len(set)}",font=("B Morvarid",15))
+        if len(set)>10:
+            set_len.config(text=f"تعداد کل زیر مجموعه ها : {2**len(set)} تعداد محاسبه شده : 1024")
         set_len.pack(side="top",fill="none",padx=10,pady=10)
         tree_viwe_sub = ttk.Treeview(subset_frame, columns=("members"))
         tree_viwe_sub.heading("#0", text="زیر مجموعه")
@@ -402,6 +434,10 @@ class App():
         scrollbar_sub.pack(side="right", fill="y", pady=10)
         tree_viwe_sub.config(yscrollcommand=scrollbar_sub.set)
         tree_viwe_sub.pack(side="left",expand=True, fill="both", padx=10, pady=10)
+        self.exit_button.config(command=self.set_section)
+        self.information_button.config(command=lambda:self.information("set_info_page"))
+    def calc_metod(self):
+        pass
 
 
 
