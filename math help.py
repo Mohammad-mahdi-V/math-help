@@ -24,11 +24,11 @@ class SetsAlgorithm:
     @staticmethod
     def subsets_one_set(given_set):
         num_sub = 2 ** len(given_set)
-        subsets_dict = {f" عضوی{i}زیر مجموعه ": [] for i in range(len(given_set) + 1)}
+        subsets_dict = {f" زیرمجموعه{i}عضوی": [] for i in range(len(given_set) + 1)}
         for i in range(len(given_set) + 1):
             for subset in itertools.combinations(given_set, i):
-                subsets_dict[f" عضوی{i}زیر مجموعه "].append(subset)
-        return subsets_dict, num_sub
+                subsets_dict[f" زیرمجموعه{i}عضوی"].append(subset)
+        return subsets_dict
 
     def subsets_all_sets(self):
         self.subsets_all = {}
@@ -356,6 +356,8 @@ class App():
         name_label.pack(side="right",fill="none",expand=True,padx=10)
         set_label=ttk.Label(information_set,text=f"{set} : اعضای مجموعه ",font=("B Morvarid",15))
         set_label.pack(side="left",fill="none",expand=True,padx=10)
+        set_len=ttk.Label(information_set,text=f"{len(set)} :  طول مجموعه ",font=("B Morvarid",15))
+        set_len.pack(side="bottom",fill="none",padx=10,pady=10)
         tab_info=ttk.Notebook(information_frame)
         tab_info.pack(side="bottom",fill="both",expand=True,padx=10,pady=10)
         partition_frame=tk.Frame(tab_info)
@@ -377,7 +379,34 @@ class App():
         tree_viwe_par.config(yscrollcommand=scrollbar.set)
         
         tree_viwe_par.pack(side="left", fill="both", expand=True)
+        set_len=ttk.Label(subset_frame,text=f"تعداد زیر مجموعه ها : {2**len(set)}",font=("B Morvarid",15))
+        set_len.pack(side="top",fill="none",padx=10,pady=10)
+        tree_viwe_sub = ttk.Treeview(subset_frame, columns=("members"))
+        tree_viwe_sub.heading("#0", text="زیر مجموعه")
+        tree_viwe_sub.heading("members", text="اعضاء")
+        tree_viwe_sub.column("#0", width=150)
+        tree_viwe_sub.column("members", width=250)
+        # افزودن داده‌ها به Treeview زیر مجموعه‌ها
+        for subset_name, subset_items in subsets.items():
+            parent = tree_viwe_sub.insert("", "end", text=subset_name, open=False)
+            number_loop = 1
+            for item in subset_items:
+                # تبدیل هر عضو به فرمت مجموعه، یعنی {1, 2, 34} به جای (1, 2, 34)
+                item_str = "{" + ", ".join(map(str, item)) + "}"
+                tree_viwe_sub.insert(parent, "end", text=number_loop, values=(item_str,))
+                number_loop += 1
 
 
+        # افزودن اسکرول بار عمودی به Treeview زیر مجموعه‌ها
+        scrollbar_sub = ttk.Scrollbar(subset_frame, orient="vertical", command=tree_viwe_sub.yview)
+        scrollbar_sub.pack(side="right", fill="y", pady=10)
+        tree_viwe_sub.config(yscrollcommand=scrollbar_sub.set)
+        tree_viwe_sub.pack(side="left",expand=True, fill="both", padx=10, pady=10)
+
+
+
+
+print(SetsAlgorithm.subsets_one_set({1,2,34,5}))
 App(tk.Tk())
 tk.mainloop()
+
