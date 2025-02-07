@@ -39,13 +39,13 @@ class SetsAlgorithm:
 
     @staticmethod
     def partitions(given_set):
-        if len(given_set)<=6:
+        if len(given_set)<=5:
             return list(more_itertools.set_partitions(given_set))
         else:
             partition_list=[]
             partition_loop=0
             for partition in more_itertools.set_partitions(given_set):
-                if partition_loop<=201:
+                if partition_loop<=100:
                     partition_list.append(partition) 
                     partition_loop+=1
                 else:
@@ -189,11 +189,15 @@ class App():
         sttk.use_dark_theme()
         style.configure("TButton", font=("B Morvarid", 20), padding=10, foreground="white")
         style.configure("Switch.TCheckbutton", font=("B Morvarid", 15),padding=0)
-
+        style.configure("TNotebook.Tab", font=("B Morvarid", 15), padding=5, borderwidth=0, relief="flat", highlightthickness=0,anchor="center")
+        style.configure("Treeview.Heading", font=("B Morvarid", 14, "bold"))
+        style.configure("Treeview", font=("B Morvarid", 12))
         sttk.use_light_theme()
         style.configure("TButton", font=("B Morvarid", 20), padding=10, foreground="black")
         style.configure("Switch.TCheckbutton", font=("B Morvarid", 15),padding=0)
-
+        style.configure("TNotebook.Tab", font=("B Morvarid", 15), padding=5, borderwidth=0, relief="flat", highlightthickness=0,anchor="center")
+        style.configure("Treeview.Heading", font=("B Morvarid", 14, "bold"))
+        style.configure("Treeview", font=("B Morvarid", 12))
         sttk.set_theme(darkdetect.theme())
         self.switch_var = tk.BooleanVar()
         if sttk.get_theme() == "dark":
@@ -346,9 +350,36 @@ class App():
         self.clear_screen()
         information_frame = tk.Frame(self.root)
         information_frame.pack(side="top", fill="both", expand=True, padx=10, pady=10)
-
-
+        information_set=tk.Frame(information_frame)
+        information_set.pack(side="top",fill="both",expand=True,padx=10,pady=10)
+        name_label=ttk.Label(information_set,text=f"{set_name} : نام مجموعه ",font=("B Morvarid",15))
+        name_label.pack(side="right",fill="none",expand=True,padx=10)
+        set_label=ttk.Label(information_set,text=f"{set} : اعضای مجموعه ",font=("B Morvarid",15))
+        set_label.pack(side="left",fill="none",expand=True,padx=10)
+        tab_info=ttk.Notebook(information_frame)
+        tab_info.pack(side="bottom",fill="both",expand=True,padx=10,pady=10)
+        partition_frame=tk.Frame(tab_info)
+        subset_frame=tk.Frame(tab_info)
+        tab_info.add(partition_frame,text="افراز ها")
+        tab_info.add(subset_frame,text="زیر مجموعه ها")
+        tree_viwe_par=ttk.Treeview(partition_frame,columns=("par"))
+        tree_viwe_par.heading("#0", text="شماره افراز")
+        tree_viwe_par.heading("par", text=" اعضای افراز")
+        tree_viwe_par.column("#0", width=50)
+        tree_viwe_par.column("par", width=100)
+        for i, partition in enumerate(partitions):
+            # تبدیل لیست به رشته و تغییر `[]` به `{}` برای نمایش
+            partition_str = " , ".join([f"{{{', '.join(map(str, subset))}}}" for subset in partition])
+            # پوشاندن کل پارتیشن‌ها با `{}` 
+            partition_str = f"{{{{{partition_str}}}}}"
+            
+            tree_viwe_par.insert("", "end", text=str(i+1), values=( partition_str))
+        scrollbar = ttk.Scrollbar(partition_frame, orient="vertical", command=tree_viwe_par.yview)
+        scrollbar.pack(side="right", fill="y",pady=10)
+        tree_viwe_par.config(yscrollcommand=scrollbar.set)
         
+        tree_viwe_par.pack(side="left", fill="both", expand=True)
+
 
 App(tk.Tk())
 tk.mainloop()
