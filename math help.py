@@ -39,8 +39,18 @@ class SetsAlgorithm:
 
     @staticmethod
     def partitions(given_set):
-        partitions = list(more_itertools.set_partitions(given_set))
-        return partitions
+        if len(given_set)<=6:
+            return list(more_itertools.set_partitions(given_set))
+        else:
+            partition_list=[]
+            partition_loop=0
+            for partition in more_itertools.set_partitions(given_set):
+                if partition_loop<=201:
+                    partition_list.append(partition) 
+                    partition_loop+=1
+                else:
+                    break
+            return partition_list
 
     def U(self, bitmask):
         return set().union(*(self.sets[i] for i in range(self.num_sets) if bitmask & (1 << i)))
@@ -329,13 +339,15 @@ class App():
             self.set_name.set(self.set_name.get().strip().upper())
         self.set_info_page()
     def set_info_page(self):
-        set=eval(self.set.get())
-        set_name=self.set_name.get()
-        print(set)
-        set_oop=SetsAlgorithm({f"{set_name}":set})
-        partitions=set_oop.partitions(set)
-        subsets=set_oop.subsets_one_set(set)        
-        len_set=len(set)
+        set = eval(self.set.get())
+        set_name = self.set_name.get()
+        subsets= SetsAlgorithm.subsets_one_set(set)
+        partitions = SetsAlgorithm.partitions(set)        
+        self.clear_screen()
+        information_frame = tk.Frame(self.root)
+        information_frame.pack(side="top", fill="both", expand=True, padx=10, pady=10)
+
+
         
 
 App(tk.Tk())
