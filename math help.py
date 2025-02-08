@@ -10,7 +10,8 @@ import darkdetect
 from tkinter import messagebox
 import re
 
-# نکته: ما تغییر __repr__ را اعمال نمی‌کنیم؛ فقط از توابع کمکی set_to_str برای نمایش زیبا استفاده می‌کنیم.
+# در اینجا می‌توان به صورت انتخابی متد __repr__ کلاس frozenset را هم تغییر داد (روش پیشنهادی خطرناک‌تر است)
+# اما در اینجا ما تنها از توابع کمکی set_to_str استفاده می‌کنیم.
 
 class SetsAlgorithm:
     def __init__(self, set_of_sets):
@@ -63,36 +64,18 @@ class SetsAlgorithm:
     @staticmethod
     def fix_set_variables(expression):
         """
-        اگر عبارت ورودی مجموعه نباشد، پیام خطا نمایش می‌دهد.
-        در داخل هر جفت آکولاد، اگر عنصری عدد نباشد و یا در کوتیشن نباشد،
-        به‌طور خودکار آن را به حروف بزرگ در داخل کوتیشن قرار می‌دهد.
+        داخل هر جفت آکولاد، اگر عنصری عدد نباشد و کوتیشن نداشته باشد،
+        به‌طور خودکار کوتیشن اضافه می‌کند.
         """
-        if not (expression.startswith("{") and expression.endswith("}")):
-            messagebox.showerror("ERROR", "ورودی باید با { شروع و با } تمام شود")
-            return expression
-
-        def replacer(match):
-            inner_content = match.group(1)
-            tokens = inner_content.split(",")
-            fixed_tokens = []
-            for token in tokens:
-                token = token.strip()
-                if token == "":
-                    continue
-                # اگر token عدد باشد یا از قبل در کوتیشن قرار داشته باشد، همان نگه داشته شود.
-                if token.isdigit() or ((token.startswith('"') and token.endswith('"')) or (token.startswith("'") and token.endswith("'"))):
-                    fixed_tokens.append(token)
-                else:
-                    # در اینجا فرض می‌کنیم token شامل حروف یا اعداد و حروف است؛ آن را به صورت خودکار به حروف بزرگ در داخل کوتیشن قرار می‌دهیم.
-                    if token.isalpha() or token.isalnum():
-                        fixed_tokens.append(f'"{token.upper()}"')
-                    else:
-                        messagebox.showerror("ERROR", f"مقدار '{token}' باید به صورت صحیح تعریف شود.")
-                        fixed_tokens.append(token)
-            return "{" + ", ".join(fixed_tokens) + "}"
-
-        fixed_expression = re.sub(r"\{([^{}]*)\}", replacer, expression)
-        return fixed_expression
+        return re.sub(
+            r"\{([^{}]*)\}",
+            lambda m: "{" + ", ".join(
+                f'"{x.strip()}"' if (not x.strip().isdigit() and not (x.strip().startswith("'") or x.strip().startswith('"')))
+                else x.strip()
+                for x in m.group(1).split(",")
+            ) + "}",
+            expression
+        )
 
     @staticmethod
     def to_frozenset(obj):
@@ -188,6 +171,7 @@ class SetsAlgorithm:
         
         try:
             result = eval(transformed_text, {"__builtins__": {}, "frozenset": frozenset}, variables)
+            # استفاده از set_to_str جهت حذف کلمه‌ی frozenset از خروجی
             return self.set_to_str(result)
         except Exception as e:
             messagebox.showerror("ارور", f"خطا در ارزیابی عبارت: {e}")
@@ -196,6 +180,7 @@ class SetsAlgorithm:
     @staticmethod
     def convert_set_item(item):
         if isinstance(item, frozenset):
+            # نمایش مجموعه تو در تو به صورت آکولادی بدون کلمه‌ی frozenset
             return "{" + ", ".join(SetsAlgorithm.convert_set_item(sub_item) for sub_item in item) + "}"
         return str(item)
 
@@ -478,6 +463,17 @@ class App():
         if result == self.set.get():
             result = "A"
         self.ruselt_label_part_2.config(text=result)
+
+    @staticmethod
+    def fix_set_variables(expression):
+        return re.sub(
+            r"\{([^{}]*)\}",
+            lambda m: "{" + ", ".join(
+                f'"{x.strip()}"' if not x.strip().isdigit() and not (x.strip().startswith("'") or x.strip().startswith('"')) else x.strip()
+                for x in m.group(1).split(",")
+            ) + "}",
+            expression
+        )
 
 App(tk.Tk())
 tk.mainloop()
