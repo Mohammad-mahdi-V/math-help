@@ -335,14 +335,14 @@ class App():
     def check_entry(self):
         entry_value = self.set.get().strip()
         # بررسی اینکه ورودی با { شروع و با } تمام شود
-        if not entry_value.startswith("{") or not entry_value.endswith("}"):
+        if not (entry_value.startswith("{") and entry_value.endswith("}")):
             messagebox.showerror("ERROR", "ورودی باید با { شروع و با } تمام شود")
             return
 
         # به‌طور خودکار، bare value‌ها (بدون کوتیشن) را اصلاح می‌کنیم
         fixed_entry_value = SetsAlgorithm.fix_set_variables(entry_value)
-
-        # تلاش برای پردازش رشته ورودی جهت شناسایی فرمت‌های تو در تو
+        
+        # اکنون ورودی اصلاح‌شده را برای پردازش تو در تو (nested) به parse_set_string می‌دهیم
         try:
             transformed = SetsAlgorithm.parse_set_string(fixed_entry_value)
             # ارزیابی برای اعتبارسنجی ورودی
@@ -351,6 +351,7 @@ class App():
             messagebox.showerror("ERROR", f"فرمت مجموعه وارد شده نادرست است:\n{e}")
             return
 
+        # بررسی نام مجموعه
         if not self.set_name.get() or self.set_name.get().isdigit():
             messagebox.showerror("ERROR", "نمیتوانید نام مجموعه را خالی بگذارید یا عدد وارد کنید")
             return
@@ -359,6 +360,7 @@ class App():
             messagebox.showwarning("Warning", "حروف به صورت بزرگ تبدیل شدند")
             self.set_name.set(self.set_name.get().strip().upper())
 
+        # ادامه فرآیند ثبت مجموعه
         self.set_info_page()
 
     def set_info_page(self):
