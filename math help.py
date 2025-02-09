@@ -26,56 +26,134 @@ class SetsAlgorithm:
         self.num_sets = len(self.sets)
 
     @staticmethod
-    def parse_set_string(s, advance_u=False):
-        s = s.strip()
-        if not (s.startswith("{") and s.endswith("}")):
-            return s
-        # حذف آکولادهای بیرونی
-        content = s[1:-1].strip()
-        if content == "":
-            return "frozenset()"
-        elements = []
-        current = ""
-        depth = 0
-        for char in content:
-            if char == '{':
-                depth += 1
-                current += char
-            elif char == '}':
-                depth -= 1
-                current += char
-            elif char == ',' and depth == 0:
-                elements.append(current.strip())
-                current = ""
-            else:
-                current += char
-        if current:
-            elements.append(current.strip())
-        parsed_elements = []
-        for elem in elements:
-            # اگر عنصری دوباره به صورت مجموعه نوشته شده باشد، به‌صورت بازگشتی پردازش می‌شود
-            if elem.startswith("{") and elem.endswith("}"):
-                parsed_elements.append(SetsAlgorithm.parse_set_string(elem))
-            else:
-                parsed_elements.append(elem)
-        inner_expr = ", ".join(parsed_elements)
-        return f"frozenset({{{inner_expr}}})"
+    def parse_set_string(s: str) -> str:
+        def parse_expr(s: str, i: int):
+            """عبارت کلی (که ممکن است شامل مجموعه‌ها، عملگرها و اتم‌ها باشد) را از محل i پردازش می‌کند."""
+            tokens = []
+            while i < len(s):
+                if s[i].isspace():
+                    i += 1
+                    continue
+                if s[i] == '{':
+                    parsed_set, i = parse_set(s, i, nested=False)
+                    tokens.append(parsed_set)
+                elif s[i] in "|&-()":
+                    tokens.append(s[i])
+                    i += 1
+                else:
+                    # پردازش اتم (کلمه یا عدد)
+                    start = i
+                    while i < len(s) and s[i].isalnum():
+                        i += 1
+                    tokens.append(s[start:i])
+            return " ".join(tokens), i
 
+        def parse_set(s: str, i: int, nested: bool):
+            """
+            مجموعه‌ای را که از s[i] شروع می‌شود (با '{') پردازش می‌کند.
+            اگر nested برابر True باشد، خروجی به صورت frozenset نمایش داده می‌شود.
+            """
+            # فرض می‌کنیم s[i] == '{'
+            i += 1  # رد کردن آکلاد باز
+            elements = []
+            current_chars = []
+            while i < len(s):
+                if s[i].isspace():
+                    i += 1
+                    continue
+                if s[i] == '{':
+                    # اگر در حال ساخت یک اتم هستیم، آن را به لیست عناصر اضافه می‌کنیم
+                    if current_chars:
+                        token = "".join(current_chars).strip()
+                        if token:
+                            elements.append(token)
+                        current_chars = []
+                    # فراخوانی بازگشتی برای مجموعه تو در تو
+                    nested_set, i = parse_set(s, i, nested=True)
+                    elements.append(nested_set)
+                elif s[i] == '}':
+                    if current_chars:
+                        token = "".join(current_chars).strip()
+                        if token:
+                            elements.append(token)
+                        current_chars = []
+                    i += 1  # رد کردن آکلاد بسته
+                    break
+                elif s[i] == ',':
+                    if current_chars:
+                        token = "".join(current_chars).strip()
+                        if token:
+                            elements.append(token)
+                        current_chars = []
+                    i += 1  # رد کردن کاما
+                else:
+                    current_chars.append(s[i])
+                    i += 1
+            # در صورت باقی ماندن کاراکترهایی، آن‌ها را اضافه می‌کنیم
+            if current_chars:
+                token = "".join(current_chars).strip()
+                if token:
+                    elements.append(token)
+            inner = ", ".join(elements)
+            return (f"frozenset({{{inner}}})", i) if nested else (f"{{{inner}}}", i)
+
+        parsed, _ = parse_expr(s, 0)
+        return parsed
     @staticmethod
     def fix_set_variables(expression):
         """
-        داخل هر جفت آکولاد، اگر عنصری عدد نباشد و کوتیشن نداشته باشد،
-        به‌طور خودکار کوتیشن اضافه می‌کند.
+        پردازش عبارت ورودی:
+        - اگر توکن داخل {} باشد و عدد نباشد، کوتیشن می‌گیرد.
+        - اگر توکن خارج از {} باشد، کوتیشن نمی‌گیرد.
         """
-        return re.sub(
-            r"\{([^{}]*)\}",
-            lambda m: "{" + ", ".join(
-                f'"{x.strip()}"' if (not x.strip().isdigit() and not (x.strip().startswith("'") or x.strip().startswith('"')))
-                else x.strip()
-                for x in m.group(1).split(",")
-            ) + "}",
-            expression
-        )
+        all_tokens = []          # ذخیره همه توکن‌ها
+        final_result = []        # ذخیره نتیجه نهایی
+        token = ""               # توکن موقت
+        inside_braces = False    # پرچم برای بررسی اینکه داخل {} هستیم یا نه
+
+        for ch in expression:
+            if ch == '{':
+                inside_braces = True
+                if token.strip():
+                    all_tokens.append(token.strip())
+                    final_result.append(token.strip())
+                    token = ""
+                final_result.append(ch)
+
+            elif ch == '}':
+                if token.strip():
+                    fixed_token = token.strip()
+                    all_tokens.append(fixed_token)
+                    # کوتیشن فقط برای توکن‌های غیرعددی داخل {}
+                    if inside_braces and not fixed_token.isdigit() and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
+                        fixed_token = f'"{fixed_token}"'
+                    final_result.append(fixed_token)
+                    token = ""
+                final_result.append(ch)
+                inside_braces = False
+
+            elif ch in ['|', '&', '-', '(', ')', ',']:
+                if token.strip():
+                    fixed_token = token.strip()
+                    all_tokens.append(fixed_token)
+                    if inside_braces and not fixed_token.isdigit() and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
+                        fixed_token = f'"{fixed_token}"'
+                    final_result.append(fixed_token)
+                    token = ""
+                final_result.append(ch)
+
+            else:
+                token += ch
+
+        if token.strip():  # برای آخرین توکن باقی‌مانده
+            fixed_token = token.strip()
+            all_tokens.append(fixed_token)
+            if inside_braces and not fixed_token.isdigit() and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
+                fixed_token = f'"{fixed_token}"'
+            final_result.append(fixed_token)
+
+        print("📋 تمام توکن‌ها:", all_tokens)
+        return "".join(final_result)
 
     @staticmethod
     def to_frozenset(obj):
@@ -161,17 +239,17 @@ class SetsAlgorithm:
         نتیجه به صورت رشته‌ای با آکولاد (بدون ذکر "frozenset") به کاربر نمایش داده می‌شود.
         """
         text = text.replace('∩', '&').replace('∪', '|')
+        text=SetsAlgorithm.fix_set_variables(text)
         allowed_chars = set(" {}(),|&-0123456789'\"")
         if not all(ch in allowed_chars or ch.isalpha() for ch in text):
             messagebox.showerror("ارور", "(جهت آشنایی با کاراکترهای پشتیبانی شده وارد بخش نحوه کار در این بخش شوید)خطا: کاراکترهای نامعتبر شناسایی شد.")
             return "در انتظار دریافت عبارت..."
-        
-        transformed_text = SetsAlgorithm.parse_set_string(text, advance_u=True)
+
+        transformed_text = SetsAlgorithm.parse_set_string(text)
         variables = {name: frozenset(set_val) for name, set_val in self.set_of_sets.items()}
-        
         try:
+            print(transformed_text," ,,,,,",type(transformed_text))
             result = eval(transformed_text, {"__builtins__": {}, "frozenset": frozenset}, variables)
-            # استفاده از set_to_str جهت حذف کلمه‌ی frozenset از خروجی
             return self.set_to_str(result)
         except Exception as e:
             messagebox.showerror("ارور", f"خطا در ارزیابی عبارت: {e}")
@@ -333,18 +411,18 @@ class App():
             sttk.use_dark_theme()
 
     def check_entry(self):
-        entry_value = self.set.get().strip()
+        self.set_finall = self.set.get().strip()
         # بررسی اینکه ورودی با { شروع و با } تمام شود
-        if not (entry_value.startswith("{") and entry_value.endswith("}")):
+        if not (self.set_finall.startswith("{") and self.set_finall.endswith("}")):
             messagebox.showerror("ERROR", "ورودی باید با { شروع و با } تمام شود")
             return
 
         # به‌طور خودکار، bare value‌ها (بدون کوتیشن) را اصلاح می‌کنیم
-        fixed_entry_value = SetsAlgorithm.fix_set_variables(entry_value)
+        self.set_finall = SetsAlgorithm.fix_set_variables(self.set_finall)
         
         # اکنون ورودی اصلاح‌شده را برای پردازش تو در تو (nested) به parse_set_string می‌دهیم
         try:
-            transformed = SetsAlgorithm.parse_set_string(fixed_entry_value)
+            transformed = SetsAlgorithm.parse_set_string(self.set_finall)
             # ارزیابی برای اعتبارسنجی ورودی
             eval_set = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
         except Exception as e:
@@ -365,8 +443,7 @@ class App():
 
     def set_info_page(self):
         # ابتدا ورودی را اصلاح می‌کنیم تا bare valueها درون کوتیشن قرار گیرند
-        fixed_entry = SetsAlgorithm.fix_set_variables(self.set.get())
-        transformed = SetsAlgorithm.parse_set_string(fixed_entry)
+        transformed = SetsAlgorithm.parse_set_string(self.set_finall)
         try:
             evaluated = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
             # به صورت بازگشتی همه setهای موجود را به frozenset تبدیل می‌کنیم
@@ -393,8 +470,11 @@ class App():
             self.calc_var = tk.StringVar()
             entry_frame = tk.Frame(sets_calc_frame)
             entry_frame.pack(side="top", expand=True, fill="x")
-            calc_entry = ttk.Entry(entry_frame, font=("B Morvarid", 20), textvariable=self.calc_var)
+            calc_entry = ttk.Entry(entry_frame, font=("B Morvarid", 23), textvariable=self.calc_var)
             calc_entry.pack(side="right", expand=True, fill="both", padx=10, pady=10, ipadx=10, ipady=10)
+            calc_scrollbar = ttk.Scrollbar(entry_frame, orient="horizontal", command=calc_entry.xview)
+            calc_entry.config(xscrollcommand=calc_scrollbar.set)
+            calc_scrollbar.pack(side="bottom", fill="x")
             ruselt_frame = tk.Frame(sets_calc_frame)
             ruselt_frame.pack(side="top", expand=True, fill="both")
             ruselt_label_part_1 = ttk.Label(ruselt_frame, text=": جواب", font=("B Morvarid", 20))
@@ -460,22 +540,14 @@ class App():
 
     def calc_metod_one_set(self):
         fixed_set = SetsAlgorithm.fix_set_variables(self.calc_var.get())
-        set_oop = SetsAlgorithm({f"{self.set_name.get()}": eval(self.set.get(), {"__builtins__": {}, "frozenset": frozenset})})
+        
+        set_oop = SetsAlgorithm({f"{self.set_name.get()}": eval(SetsAlgorithm.parse_set_string(SetsAlgorithm.fix_set_variables(self.set.get())), {"__builtins__": {}, "frozenset": frozenset})})
         result = set_oop.U_I_Ms_advance(fixed_set)
-        if result == self.set.get():
+        if result == self.set:
             result = "A"
         self.ruselt_label_part_2.config(text=result)
 
-    @staticmethod
-    def fix_set_variables(expression):
-        return re.sub(
-            r"\{([^{}]*)\}",
-            lambda m: "{" + ", ".join(
-                f'"{x.strip()}"' if not x.strip().isdigit() and not (x.strip().startswith("'") or x.strip().startswith('"')) else x.strip()
-                for x in m.group(1).split(",")
-            ) + "}",
-            expression
-        )
+
 
 App(tk.Tk())
 tk.mainloop()
