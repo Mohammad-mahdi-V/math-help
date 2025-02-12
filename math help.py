@@ -484,10 +484,6 @@ class ChatFrame(ttk.Frame):
         label = tk.Label(bubble, text=message, wraplength=400, justify="left",
                          bg=bubble_bg, font=("B Morvarid", 12), fg="black")      
         label.pack()
-        # if sender=="Gemini":
-        #     repely_button=ttk.Button(bubble,padding=10,command=lambda:self.repely(self.Gemini_message_code),text="ریپلای")
-        #     repely_button.pack()
-        #     self.Gemini_message_code+=1
         anchor_side = "w" if sender == "You" else "e"
         bubble.pack(fill="x", padx=10, pady=5, anchor=anchor_side)
         self.canvas.yview_moveto(1.0)
@@ -498,11 +494,6 @@ class ChatFrame(ttk.Frame):
             widget.destroy()
     def repely(self):
         pass
-
-# -------------------------------
-# رابط کاربری اصلی (Tkinter UI) با sv_ttk
-# -------------------------------
-
 class App():
     def __init__(self, root):
         self.root = root
@@ -614,14 +605,7 @@ class App():
         input_frame = tk.Frame(user_input_frame)
         input_frame.pack(side="top",padx=10, pady=10, fill="x")
         text_scrollbar = ttk.Scrollbar(input_frame, orient="vertical")
-
-        # ایجاد Text ورودی
-        self.input_ai = tk.Text(input_frame, height=5, borderwidth=0, relief="solid",
-                            background=self.theme_color, highlightthickness=2,
-                            highlightbackground=self.theme_color,
-                            highlightcolor=self.theme_color_border_color,
-                            font=("B Morvarid", 13), foreground=self.theme_color_font_color,
-                            yscrollcommand=text_scrollbar.set)  # اتصال اسکرول‌بار به تکست
+        self.input_ai = tk.Text(input_frame, height=5, borderwidth=0, relief="solid",background=self.theme_color, highlightthickness=2,highlightbackground=self.theme_color,highlightcolor=self.theme_color_border_color,font=("B Morvarid", 15), foreground=self.theme_color_font_color,yscrollcommand=text_scrollbar.set)  # اتصال اسکرول‌بار به تکست
 
         # اتصال اسکرول‌بار به Text
         text_scrollbar.config(command=self.input_ai.yview)
@@ -632,9 +616,9 @@ class App():
         self.chat_frame.pack(padx=10, pady=10, fill="both", expand=True)
         delete_button = ttk.Button(user_input_frame, text="پاک کردن پیام ها", command=lambda:self.chat_frame.clear_messages())
         delete_button.pack(pady=5, padx=10, fill="x")
-
         send_button = ttk.Button(user_input_frame, text="ارسال", command=self.on_send)
         send_button.pack(pady=10, expand=True, fill="both", padx=10)
+        self.exit_button.config(text="صفحه قبل",command=self.main_page)
     def handle_response(self,user_message, gemini_label):
         response = self.jupiter_ai_model.send_message(user_message)
         self.root.after(0, lambda: gemini_label.config(text=response))
