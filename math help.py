@@ -5,7 +5,6 @@ import matplotlib_venn
 import tkinter as tk
 import tkinter.ttk as ttk
 import sv_ttk as sttk
-from venn import venn
 import darkdetect
 from tkinter import messagebox
 import google.generativeai as genai
@@ -15,11 +14,11 @@ import ctypes
 import sys
 import threading
 import socket
+from concurrent.futures import ThreadPoolExecutor  # برای اجرای همزمان
 
-
-# در اینجا می‌توان به صورت انتخابی متد __repr__ کلاس frozenset را هم تغییر داد (روش پیشنهادی خطرناک‌تر است)
-# اما در اینجا ما تنها از توابع کمکی set_to_str استفاده می‌کنیم.
-
+# -------------------------------------------
+# کلاس‌های مربوط به الگوریتم‌های مجموعه
+# -------------------------------------------
 class SetsAlgorithm:
     def __init__(self, set_of_sets):
         if isinstance(set_of_sets, dict):
@@ -31,8 +30,6 @@ class SetsAlgorithm:
             self.set_names = [f"Set {i+1}" for i in range(len(set_of_sets))]
             self.sets = [set(s) for s in set_of_sets]
         self.num_sets = len(self.sets)
-
-    @staticmethod
 
     @staticmethod
     def parse_set_string(s: str) -> str:
@@ -88,9 +85,8 @@ class SetsAlgorithm:
     @staticmethod
     def fix_set_variables(expression):
         """
-        در این تابع ما با استفاده از یک شمارنده (nesting_level) تشخیص می‌دهیم که آیا
-        توکن در داخل آکلاد قرار دارد یا در سطح بالا.
-        اگر توکن در داخل آکلاد باشد (nesting_level > 0) و عدد نباشد، آن را داخل نقل قول قرار می‌دهیم.
+        در این تابع با استفاده از متغیر nesting_level مشخص می‌کنیم که توکن داخل آکلاد است یا نه.
+        اگر توکن در داخل آکلاد باشد (nesting_level > 0) و عدد نباشد، آن را داخل کوتیشن قرار می‌دهیم.
         """
         result = []
         token = ""
@@ -140,7 +136,6 @@ class SetsAlgorithm:
     @staticmethod
     def subsets_one_set(given_set):
         num_loop = 0
-        # اگر ورودی به صورت رشته نباشد، آن را به رشته تبدیل می‌کنیم
         if not isinstance(given_set, str):
             given_set = repr(given_set)
         given_set = eval(given_set)
@@ -178,49 +173,17 @@ class SetsAlgorithm:
                     break
             return partition_list
 
-    def U(self, bitmask):
-        return set().union(*(self.sets[i] for i in range(self.num_sets) if bitmask & (1 << i)))
-
-    def I(self, bitmask):
-        selected_sets = [self.sets[i] for i in range(self.num_sets) if bitmask & (1 << i)]
-        return set.intersection(*selected_sets)
-
-    def Ms(self, bitmask, target_bit):
-        main_set = self.sets[target_bit]
-        other_sets = self.U(bitmask & ~(1 << target_bit))
-        return main_set - other_sets
-
-    def check_other_information(self):
-        info = {
-            "set_lengths": {f"Set {i+1} length": len(s) for i, s in enumerate(self.sets)},
-            "subsets_info": {
-                f"Set {i+1}": {
-                    f"Set {j+1}": set(self.sets[i]).issubset(set(self.sets[j]))
-                    for j in range(self.num_sets) if i != j
-                }
-                for i in range(self.num_sets)
-            },
-            "all_sets_chain": all(
-                set(self.sets[i]).issubset(set(self.sets[j])) or set(self.sets[j]).issubset(set(self.sets[i]))
-                for i in range(self.num_sets) for j in range(i + 1, self.num_sets)
-            )
-        }
-        info["all_sets_antychain"] = not info["all_sets_chain"]
-        return info
-
     def U_I_Ms_advance(self, text):
         """
-        این متد عبارت ورودی کاربر (با عملگرهایی مانند اتحاد، اشتراک و تفاوت) را دریافت می‌کند.
-        ابتدا ورودی با parse_set_string به عبارتی صحیح تبدیل می‌شود؛ سپس eval شده و در نهایت
-        نتیجه به صورت رشته‌ای با آکولاد (بدون ذکر "frozenset") به کاربر نمایش داده می‌شود.
+        این متد عبارت ورودی کاربر (مثلاً اعمال مجموعه با عملگرهایی مانند اتحاد، اشتراک و تفاوت) را دریافت می‌کند.
+        ابتدا با fix_set_variables و parse_set_string به عبارتی صحیح تبدیل می‌شود؛ سپس با eval و دیکشنری مجموعه‌ها نتیجه محاسبه می‌شود.
         """
         text = text.replace('∩', '&').replace('∪', '|')
-        text=SetsAlgorithm.fix_set_variables(text)
+        text = SetsAlgorithm.fix_set_variables(text)
         allowed_chars = set(" {}(),|&-0123456789'\"")
         if not all(ch in allowed_chars or ch.isalpha() for ch in text):
-            messagebox.showerror("ارور", "(جهت آشنایی با کاراکترهای پشتیبانی شده وارد بخش نحوه کار در این بخش شوید)خطا: کاراکترهای نامعتبر شناسایی شد.")
+            messagebox.showerror("ارور", "خطا: کاراکترهای نامعتبر شناسایی شد.")
             return "در انتظار دریافت عبارت..."
-
         transformed_text = SetsAlgorithm.parse_set_string(text)
         variables = {name: frozenset(set_val) for name, set_val in self.set_of_sets.items()}
         try:
@@ -233,7 +196,6 @@ class SetsAlgorithm:
     @staticmethod
     def convert_set_item(item):
         if isinstance(item, frozenset):
-            # نمایش مجموعه تو در تو به صورت آکولادی بدون کلمه‌ی frozenset
             return "{" + ", ".join(SetsAlgorithm.convert_set_item(sub_item) for sub_item in item) + "}"
         return str(item)
 
@@ -257,22 +219,22 @@ class SetsAlgorithm:
                 '011': len(set_two & set_three - set_one),
                 '111': len(set_one & set_two & set_three)
             }
-            venn = matplotlib_venn.venn3(subsets=subsets, set_labels=('Set 1', 'Set 2', 'Set 3'))
+            venn_obj = matplotlib_venn.venn3(subsets=subsets, set_labels=('Set 1', 'Set 2', 'Set 3'))
             plt.title("Venn Diagram for Three Sets")
-            if venn.get_label_by_id('100'):
-                venn.get_label_by_id('100').set_text(set_one - set_two - set_three)
-            if venn.get_label_by_id('010'):
-                venn.get_label_by_id('010').set_text(set_two - set_one - set_three)
-            if venn.get_label_by_id('110'):
-                venn.get_label_by_id('110').set_text(set_one & set_two - set_three)
-            if venn.get_label_by_id('001'):
-                venn.get_label_by_id('001').set_text(set_three - set_one - set_two)
-            if venn.get_label_by_id('101'):
-                venn.get_label_by_id('101').set_text(set_one & set_three - set_two)
-            if venn.get_label_by_id('011'):
-                venn.get_label_by_id('011').set_text(set_two & set_three - set_one)
-            if venn.get_label_by_id('111'):
-                venn.get_label_by_id('111').set_text(set_one & set_two & set_three)
+            if venn_obj.get_label_by_id('100'):
+                venn_obj.get_label_by_id('100').set_text(set_one - set_two - set_three)
+            if venn_obj.get_label_by_id('010'):
+                venn_obj.get_label_by_id('010').set_text(set_two - set_one - set_three)
+            if venn_obj.get_label_by_id('110'):
+                venn_obj.get_label_by_id('110').set_text(set_one & set_two - set_three)
+            if venn_obj.get_label_by_id('001'):
+                venn_obj.get_label_by_id('001').set_text(set_three - set_one - set_two)
+            if venn_obj.get_label_by_id('101'):
+                venn_obj.get_label_by_id('101').set_text(set_one & set_three - set_two)
+            if venn_obj.get_label_by_id('011'):
+                venn_obj.get_label_by_id('011').set_text(set_two & set_three - set_one)
+            if venn_obj.get_label_by_id('111'):
+                venn_obj.get_label_by_id('111').set_text(set_one & set_two & set_three)
         elif self.num_sets == 2:
             set_one, set_two = self.sets
             subsets = {
@@ -280,23 +242,22 @@ class SetsAlgorithm:
                 '01': len(set_two - set_one),
                 '11': len(set_one & set_two)
             }
-            venn = matplotlib_venn.venn2(subsets=subsets, set_labels=('Set 1', 'Set 2'))
+            venn_obj = matplotlib_venn.venn2(subsets=subsets, set_labels=('Set 1', 'Set 2'))
             plt.title("Venn Diagram for Two Sets")
-            venn.get_label_by_id('10').set_text(set_one - set_two)
-            venn.get_label_by_id('01').set_text(set_two - set_one)
-            venn.get_label_by_id('11').set_text(set_one & set_two)
+            venn_obj.get_label_by_id('10').set_text(set_one - set_two)
+            venn_obj.get_label_by_id('01').set_text(set_two - set_one)
+            venn_obj.get_label_by_id('11').set_text(set_one & set_two)
         else:
             return
-
         if output_path:
             plt.savefig(output_path)
         plt.show()
 
     def draw_venn_4_more(self, output_path=None):
         venn_data = {self.set_names[i]: self.sets[i] for i in range(self.num_sets)}
+        from venn import venn  # فرض می‌کنیم ماژول venn موجود است
         venn(venn_data)
         plt.title(f"Venn Diagram for {self.num_sets} Sets")
-
         if output_path:
             plt.savefig(output_path)
         return self.get_region_info()
@@ -306,58 +267,49 @@ class SetsAlgorithm:
         sets_names = self.set_names
         sets_dict = self.set_of_sets
         n = self.num_sets
-
         for r in range(1, n + 1):
             for include in itertools.combinations(range(n), r):
                 included_sets = [sets_names[i] for i in include]
                 excluded_sets = [sets_names[i] for i in range(n) if i not in include]
-
                 region = set.intersection(*[sets_dict[name] for name in included_sets])
                 for name in excluded_sets:
                     region = region - sets_dict[name]
-
                 if region:
                     notation = '∩'.join(included_sets)
                     if excluded_sets:
                         notation += '-' + '-'.join(excluded_sets)
                     result[notation] = region
-
         return result
 
-# -------------------------------
-# اجرای خودکار برنامه با دسترسی ادمین
-# -------------------------------
+# -------------------------------------------
+# کلاس‌های مربوط به تنظیم DNS و دسترسی ادمین
+# -------------------------------------------
 class DNS_manager():
     def __init__(self):
         if ctypes.windll.shell32.IsUserAnAdmin():
-            return  # اگر از قبل ادمین است، ادامه بده
-    # اجرای مجدد برنامه با دسترسی ادمین
+            return
         ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
         sys.exit()
     @staticmethod
     def check_internet():
-        messagebox.showinfo(title="بررسی اینترنت",message="ما میخواهیم چک کنیم تا متوجه شویم به اینترنت متصل هستید یا خیر این فرایند چند ثانیه ایی طول میکشد")
+        messagebox.showinfo(title="بررسی اینترنت", message="ما میخواهیم چک کنیم تا متوجه شویم به اینترنت متصل هستید یا خیر. این فرایند چند ثانیه‌ای طول می‌کشد")
         try:
-            # ارسال درخواست به گوگل برای بررسی اینترنت
             socket.create_connection(("8.8.8.8", 53), timeout=1)
             return True
         except OSError:
-            messagebox.showerror(title="به اینترنت متصل نیستید",message="برای چت با هوش مصنوعی به اینترنت پایدار متصل شوید")
+            messagebox.showerror(title="به اینترنت متصل نیستید", message="برای چت با هوش مصنوعی به اینترنت پایدار متصل شوید")
             return False
-
-
     def set_dns(self):
-        os.system(f'netsh interface ip set dns name="Wi-Fi" static 10.202.10.202')
-        os.system(f'netsh interface ip set dns name="Ethernet" static 10.202.10.202')
-
+        os.system('netsh interface ip set dns name="Wi-Fi" static 10.202.10.202')
+        os.system('netsh interface ip set dns name="Ethernet" static 10.202.10.202')
     @staticmethod
-    def reset_dns():  
-        os.system(f'netsh interface ip set dns name="Wi-Fi" dhcp')
-        os.system(f'netsh interface ip set dns name="Ethernet" dhcp')
+    def reset_dns():
+        os.system('netsh interface ip set dns name="Wi-Fi" dhcp')
+        os.system('netsh interface ip set dns name="Ethernet" dhcp')
 
-
-
-
+# -------------------------------------------
+# کلاس هوش مصنوعی (Chat Bot) با قابلیت استریمینگ
+# -------------------------------------------
 class init_chat_bot():
     def __init__(self):
         genai.configure(api_key="AIzaSyBCpiTAYNcd1qTIup_sfcI8lB9oI_klN9Y")
@@ -384,84 +336,64 @@ class init_chat_bot():
             "response_mime_type": "text/plain",
         }
         self.model_config()
-    def model_config(self,model_name="gemini-2.0-flash-thinking-exp-01-21"):
-        self.model_name=model_name
+    def model_config(self, model_name="gemini-2.0-flash-thinking-exp-01-21"):
+        self.model_name = model_name
         self.model = genai.GenerativeModel(
             model_name=self.model_name,
             generation_config=self.generation_config,
-            
-            tools='code_execution'if self.model_name!="tunedModels/z---gwdidy3wg436" else None
-
+            tools='code_execution' if self.model_name != "tunedModels/z---gwdidy3wg436" else None
         )
-        if self.model_name!="tunedModels/z---gwdidy3wg436":
-            self.chat=self.model.start_chat(history={"role":"user","parts":[{"text":self.system_message}]})
+        if self.model_name != "tunedModels/z---gwdidy3wg436":
+            self.chat = self.model.start_chat(history={"role": "user", "parts": [{"text": self.system_message}]})
         else:
-            self.chat=self.model.start_chat(history=[])
-    def send_message(self,user_message, reply_to=None):        
+            self.chat = self.model.start_chat(history=[])
+    def send_message(self, user_message, reply_to=None):
         response = self.chat.send_message(user_message)
-        
         bot_reply = response.text.replace("Jupiter", "ژوپیتر").replace("code", "کد")
-
         return bot_reply
     def clear(self):
         self.chat.history.clear()
 
-# ----------
-
-# -------------------------------
-# تنظیم DNS
-# -------------------------------
-
-
-
-
-
-
-# کلاس برای نمایش پیام‌ها به صورت حباب‌های چت (ریسپانسیو)
-# -------------------------------
-
+# -------------------------------------------
+# کلاس نمایش پیام‌ها (Chat Frame) به صورت حباب‌های چت
+# -------------------------------------------
 class ChatFrame(ttk.Frame):
     def __init__(self, container, color, *args, **kwargs):
         super().__init__(container, *args, **kwargs)
-        # ایجاد Canvas برای اسکرول کردن پیام‌ها
-        self.Gemini_message_code=0
-        self.canvas = tk.Canvas(self, borderwidth=0, background=color,height=450,width=550)
-        self.frame = tk.Frame(self.canvas,padx=10,pady=10,background=color)
+        self.Gemini_message_code = 0
+        self.canvas = tk.Canvas(self, borderwidth=0, background=color, height=450, width=550)
+        self.frame = tk.Frame(self.canvas, padx=10, pady=10, background=color)
         self.vsb = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=self.vsb.set)
         self.vsb.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
-        # ایجاد پنجره داخلی در canvas
         self.window_item = self.canvas.create_window((0, 0), window=self.frame, anchor="nw", tags="self.frame")
-        # تنظیم ریسپانسیو بودن فریم داخلی
         self.canvas.bind("<Configure>", self.onCanvasConfigure)
         self.frame.bind("<Configure>", self.onFrameConfigure)
-        
-    
     def onFrameConfigure(self, event):
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-    
     def onCanvasConfigure(self, event):
         self.canvas.itemconfigure(self.window_item, width=event.width)
-    
     def add_message(self, sender, message):
-        # رنگ حباب: پیام‌های کاربر آبی، پیام‌های Gemini زرد
         bubble_bg = "#003F88" if sender == "You" else "#FFB700"
         bubble = tk.Frame(self.frame, bg=bubble_bg, padx=10, pady=5)
         label = tk.Label(bubble, text=message, wraplength=400, justify="left",
-                         bg=bubble_bg, font=("B Morvarid", 15), fg="black")      
+                         bg=bubble_bg, font=("B Morvarid", 15), fg="black")
         label.pack()
         anchor_side = "w" if sender == "You" else "e"
         bubble.pack(fill="x", padx=10, pady=5, anchor=anchor_side)
         self.canvas.yview_moveto(1.0)
         return label
-    def clear_messages(self,model):
-        """حذف تمام پیام‌های موجود در پنل چت"""
+    def clear_messages(self, model):
         for widget in self.frame.winfo_children():
             widget.destroy()
         model.clear()
     def repely(self):
         pass
+
+# -------------------------------------------
+# کلاس اصلی برنامه (رابط کاربری)
+# -------------------------------------------
 class App():
     def __init__(self, root):
         self.root = root
@@ -522,11 +454,11 @@ class App():
         frame_section_button.grid_rowconfigure(0, weight=1, uniform="equal")
         frame_section_button.grid_rowconfigure(1, weight=1, uniform="equal")
         enter_sets_button = ttk.Button(frame_section_button, text="مجموعه ها", command=self.enter_sets)
-        enter_sets_button.grid(column=0,row=0,padx=10,pady=10,sticky="ew")
+        enter_sets_button.grid(column=0, row=0, padx=10, pady=10, sticky="ew")
         enter_L_equation_button = ttk.Button(frame_section_button, text="مختصات", command=self.enter_L_equation)
-        enter_L_equation_button.grid(column=1,row=0,padx=10,pady=10,sticky="ew")
+        enter_L_equation_button.grid(column=1, row=0, padx=10, pady=10, sticky="ew")
         enter_ai_button = ttk.Button(frame_section_button, text="گفتگو با هوش مصنوعی", command=self.enter_ai)
-        enter_ai_button.grid(column=0,row=1,padx=10,pady=10,sticky="ew",columnspan=2)
+        enter_ai_button.grid(column=0, row=1, padx=10, pady=10, sticky="ew", columnspan=2)
         self.exit_button = ttk.Button(self.frame_footer, text="خروج", command=self.root.destroy)
         self.exit_button.pack(side="right", fill="x", expand=True, padx=10, pady=10)
         self.about_button = ttk.Button(self.frame_footer, text=" درباره ما", command=self.about)
@@ -534,24 +466,23 @@ class App():
         self.information_button = ttk.Button(self.frame_footer, text="نحو کار در این بخش", command=lambda: self.information("home_page"))
         self.information_button.pack(side="right", fill="x", expand=True, padx=10, pady=10)
     def enter_ai(self):
-        if DNS_manager.check_internet()==False:
+        if DNS_manager.check_internet() == False:
             return
         atexit.register(DNS_manager.reset_dns)
-        self.jupiter_ai_model=init_chat_bot()
-        self.jupiter_ai_model.chat.enable_automatic_function_calling
+        self.jupiter_ai_model = init_chat_bot()
         DNS_manager.set_dns(self=DNS_manager)
-        self.root.protocol("WM_DELETE_WINDOW", lambda: [DNS_manager.reset_dns(), self.root.destroy(),self.jupiter_ai_model.chat.history.clear])
+        self.root.protocol("WM_DELETE_WINDOW", lambda: [DNS_manager.reset_dns(), self.root.destroy(), self.jupiter_ai_model.chat.history.clear])
         self.clear_screen()
-        main_ai_frame=tk.Frame(self.root)
-        main_ai_frame.pack(side="bottom",expand=True,fill="both",padx=10 ,pady=10)
-        user_input_frame=tk.Frame(main_ai_frame)
-        user_input_frame.pack(side="left",expand=True,fill="x",padx=10 ,pady=10)
-        chats_message_frame=tk.Frame(main_ai_frame)
-        chats_message_frame.pack(side="right",expand=True,fill="x",padx=10,pady=10)
-        model_select_frame=tk.Frame(user_input_frame)
-        model_select_frame.pack(side="top",padx=10,pady=10,fill="x",expand=True)
+        main_ai_frame = tk.Frame(self.root)
+        main_ai_frame.pack(side="bottom", expand=True, fill="both", padx=10, pady=10)
+        user_input_frame = tk.Frame(main_ai_frame)
+        user_input_frame.pack(side="left", expand=True, fill="x", padx=10, pady=10)
+        chats_message_frame = tk.Frame(main_ai_frame)
+        chats_message_frame.pack(side="right", expand=True, fill="x", padx=10, pady=10)
+        model_select_frame = tk.Frame(user_input_frame)
+        model_select_frame.pack(side="top", padx=10, pady=10, fill="x", expand=True)
         model_label = ttk.Label(model_select_frame, text="انتخاب مدل:", font=("B Morvarid", 15))
-        model_label.pack(side="right",padx=10,pady=10)
+        model_label.pack(side="right", padx=10, pady=10)
         model_options_display = [
             "جمنای 2 فلاش با تفکر عمیق",
             "جمنای 2 پرو",
@@ -566,41 +497,38 @@ class App():
             "ژوپیتر": "tunedModels/z---gwdidy3wg436",
             "جمنای فلاش 2 لایت": "gemini-2.0-flash-lite-preview-02-05"
         }
-
-        self.model_combobox = ttk.Combobox(model_select_frame, values=model_options_display, font=("B Morvarid", 15),state='readonly')
-        self.model_combobox.current(0)  # پیشفرض: "جمنای 2 فلاش"
-        self.model_combobox.pack(side="left",padx=10, pady=10, fill="x",expand=True)
+        self.model_combobox = ttk.Combobox(model_select_frame, values=model_options_display, font=("B Morvarid", 15), state='readonly')
+        self.model_combobox.current(0)
+        self.model_combobox.pack(side="left", padx=10, pady=10, fill="x", expand=True)
         self.model_combobox.bind("<<ComboboxSelected>>", self.update_model)
         input_frame = tk.Frame(user_input_frame)
-        input_frame.pack(side="top",padx=10, pady=10, fill="x")
+        input_frame.pack(side="top", padx=10, pady=10, fill="x")
         text_scrollbar = ttk.Scrollbar(input_frame, orient="vertical")
-        self.input_ai = tk.Text(input_frame, height=5, borderwidth=0, relief="solid",background=self.theme_color, highlightthickness=2,highlightbackground=self.theme_color,highlightcolor=self.theme_color_border_color,font=("B Morvarid", 15), foreground=self.theme_color_font_color,yscrollcommand=text_scrollbar.set)  # اتصال اسکرول‌بار به تکست
+        self.input_ai = tk.Text(input_frame, height=5, borderwidth=0, relief="solid", background=self.theme_color,
+                                 highlightthickness=2, highlightbackground=self.theme_color, highlightcolor=self.theme_color_border_color,
+                                 font=("B Morvarid", 15), foreground=self.theme_color_font_color, yscrollcommand=text_scrollbar.set)
         text_scrollbar.config(command=self.input_ai.yview)
         self.input_ai.pack(side="left", fill="both", expand=True, ipadx=10, ipady=10)
         text_scrollbar.pack(side="right", fill="y")
         self.chat_frame = ChatFrame(chats_message_frame, color=self.theme_color)
         self.chat_frame.pack(padx=10, pady=10, fill="both", expand=True)
-        delete_button = ttk.Button(user_input_frame, text="پاک کردن پیام ها", command=lambda:self.chat_frame.clear_messages(self.jupiter_ai_model))
+        delete_button = ttk.Button(user_input_frame, text="پاک کردن پیام ها", command=lambda: self.chat_frame.clear_messages(self.jupiter_ai_model))
         delete_button.pack(pady=5, padx=10, fill="x")
         send_button = ttk.Button(user_input_frame, text="ارسال", command=self.on_send)
         send_button.pack(pady=10, expand=True, fill="both", padx=10)
-        self.exit_button.config(text="صفحه قبل",command=self.main_page)
-    def handle_response(self,user_message, gemini_label):
+        self.exit_button.config(text="صفحه قبل", command=self.main_page)
+    def handle_response(self, user_message, gemini_label):
         response = self.jupiter_ai_model.send_message(user_message)
         self.root.after(0, lambda: gemini_label.config(text=response))
     def on_send(self):
-        user_message = self.input_ai.get("1.0","end").strip()
+        user_message = self.input_ai.get("1.0", "end").strip()
         if user_message == "":
             return
-        # افزودن پیام کاربر به چت
         self.chat_frame.add_message("You", user_message).config(foreground="white")
-        # افزودن پیام موقت برای پاسخ ژوپیتر
         gemini_label = self.chat_frame.add_message("Gemini", "در حال ایجاد جواب ...")
-        self.input_ai.delete("1.0","end")
-        # اجرای دریافت پاسخ به صورت غیرهمزمان (ترد)
+        self.input_ai.delete("1.0", "end")
         threading.Thread(target=self.handle_response, args=(user_message, gemini_label), daemon=True).start()
-    def update_model(self,event):
-        global model, current_model_name
+    def update_model(self, event):
         selected_display = self.model_combobox.get()
         actual_model = self.model_options_mapping.get(selected_display, "gemini-2.0-flash-thinking-exp-01-21")
         self.jupiter_ai_model.model_config(model_name=actual_model)
@@ -627,7 +555,6 @@ class App():
         except tk.TclError:
             self.main_frame = ttk.Frame(self.root)
             self.main_frame.pack(side='top', fill="both", expand=True)
-
     def enter_sets(self):
         self.clear_screen(clear_main_frame=True)
         self.advance_var = tk.BooleanVar(value=False)
@@ -641,28 +568,22 @@ class App():
         one_set.pack(side="left", fill="x", expand=True, padx=10, pady=10)
         self.information_button.config(command=lambda: self.information("set_choice"))
         self.exit_button.config(text="صفحه قبل", command=self.main_page)
-
     def enter_L_equation(self):
         self.clear_screen()
-        frame_lins_info=ttk.Frame(self.root)
-        frame_lins_info.pack(side="top",expand=True,fill="both",padx=10,pady=10)
-        frame_lins_equation=ttk.Frame(frame_lins_info)
-        frame_lins_equation.pack(side="top",expand=True,fill="x",padx=10,pady=10)
-        frame_lins_name=ttk.Frame(frame_lins_info)
-        frame_lins_name.pack(side="top",expand=True,fill="x",padx=10 ,pady=10)
+        frame_lins_info = ttk.Frame(self.root)
+        frame_lins_info.pack(side="top", expand=True, fill="both", padx=10, pady=10)
+        frame_lins_equation = ttk.Frame(frame_lins_info)
+        frame_lins_equation.pack(side="top", expand=True, fill="x", padx=10, pady=10)
+        frame_lins_name = ttk.Frame(frame_lins_info)
+        frame_lins_name.pack(side="top", expand=True, fill="x", padx=10, pady=10)
         while True:
             break
-    
-
     def about(self):
         pass
-
     def information(self, page):
         pass
-
     def sets_section(self):
         pass
-
     def set_section(self):
         self.clear_screen()
         self.information_button.config(command=lambda: self.information("set_page"))
@@ -692,7 +613,6 @@ class App():
         scroolbar_set_entery = ttk.Scrollbar(freame_entery_set_entry, orient="horizontal", command=self.sets_entry.xview)
         self.sets_entry.config(xscrollcommand=scroolbar_set_entery.set)
         scroolbar_set_entery.pack(side="bottom", fill="x", expand=True, padx=10)
-
     def change_theme(self):
         if sttk.get_theme() == "dark":
             sttk.use_light_theme()
@@ -705,53 +625,38 @@ class App():
             self.theme_color_font_color = "white"
             self.theme_color_border_color = "white"
         try:
-            self.input_ai.config(background=self.theme_color, highlightthickness=2,highlightbackground=self.theme_color)
+            self.input_ai.config(background=self.theme_color, highlightthickness=2, highlightbackground=self.theme_color)
             self.chat_frame.canvas.config(background=self.theme_color)
             self.chat_frame.frame.config(background=self.theme_color)
         except:
             pass
     def check_entry(self):
         self.set_finall = self.set.get().strip()
-        # بررسی اینکه ورودی با { شروع و با } تمام شود
         if not (self.set_finall.startswith("{") and self.set_finall.endswith("}")):
             messagebox.showerror("ERROR", "ورودی باید با { شروع و با } تمام شود")
             return
-
-        # به‌طور خودکار، bare value‌ها (بدون کوتیشن) را اصلاح می‌کنیم
         self.set_finall = SetsAlgorithm.fix_set_variables(self.set_finall)
-        
-        # اکنون ورودی اصلاح‌شده را برای پردازش تو در تو (nested) به parse_set_string می‌دهیم
         try:
             transformed = SetsAlgorithm.parse_set_string(self.set_finall)
-            # ارزیابی برای اعتبارسنجی ورودی
             eval_set = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
         except Exception as e:
             messagebox.showerror("ERROR", f"فرمت مجموعه وارد شده نادرست است:\n{e}")
             return
-
-        # بررسی نام مجموعه
         if not self.set_name.get() or self.set_name.get().isdigit():
             messagebox.showerror("ERROR", "نمیتوانید نام مجموعه را خالی بگذارید یا عدد وارد کنید")
             return
-
         if self.set_name.get().islower():
             messagebox.showwarning("Warning", "حروف به صورت بزرگ تبدیل شدند")
             self.set_name.set(self.set_name.get().strip().upper())
-
-        # ادامه فرآیند ثبت مجموعه
         self.set_info_page()
-
     def set_info_page(self):
-        # ابتدا ورودی را اصلاح می‌کنیم تا bare valueها درون کوتیشن قرار گیرند
         transformed = SetsAlgorithm.parse_set_string(self.set_finall)
         try:
             evaluated = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
-            # به صورت بازگشتی همه setهای موجود را به frozenset تبدیل می‌کنیم
             set_obj = SetsAlgorithm.to_frozenset(evaluated)
         except Exception as e:
             messagebox.showerror("ERROR", f"خطا در ارزیابی مجموعه:\n{e}")
             return
-
         set_name = self.set_name.get()
         subsets = SetsAlgorithm.subsets_one_set(set_obj)
         partitions = SetsAlgorithm.partitions(set_obj)
@@ -790,7 +695,6 @@ class App():
             information_set.pack(side="top", fill="both", expand=True, padx=10, pady=10)
         name_label = ttk.Label(information_set, text=f"{set_name} : نام مجموعه ", font=("B Morvarid", 15))
         name_label.pack(side="right", fill="none", expand=True, padx=10)
-        # استفاده از تابع set_to_str برای نمایش اعضای مجموعه بدون کلمه‌ی frozenset
         set_label = ttk.Label(information_set, text=f"{SetsAlgorithm.set_to_str(set_obj)} : اعضای مجموعه ", font=("B Morvarid", 15))
         set_label.pack(side="left", fill="none", expand=True, padx=10)
         set_len = ttk.Label(information_set, text=f"{len(set_obj)} :  طول مجموعه ", font=("B Morvarid", 15))
@@ -800,54 +704,51 @@ class App():
         tab_info.config(height=275)
         tab_info.add(partition_frame, text="افراز ها")
         tab_info.add(subset_frame, text="زیر مجموعه ها")
-        tree_viwe_par = ttk.Treeview(partition_frame, columns=("par"))
-        tree_viwe_par.heading("#0", text="شماره افراز")
-        tree_viwe_par.heading("par", text=" اعضای افراز")
-        tree_viwe_par.column("#0", width=50)
-        tree_viwe_par.column("par", width=100)
+        treeViwe_par = ttk.Treeview(partition_frame, columns=("par"))
+        treeViwe_par.heading("#0", text="شماره افراز")
+        treeViwe_par.heading("par", text=" اعضای افراز")
+        treeViwe_par.column("#0", width=50)
+        treeViwe_par.column("par", width=100)
         for i, partition in enumerate(partitions):
-            # استفاده از set_to_str برای هر زیرمجموعه موجود در افراز
             partition_str = " , ".join([SetsAlgorithm.set_to_str(frozenset(subset)) for subset in partition])
             partition_str = f"{{{{{partition_str}}}}}"
-            tree_viwe_par.insert("", "end", text=str(i+1), values=(partition_str))
-        scrollbar = ttk.Scrollbar(partition_frame, orient="vertical", command=tree_viwe_par.yview)
+            treeViwe_par.insert("", "end", text=str(i+1), values=(partition_str))
+        scrollbar = ttk.Scrollbar(partition_frame, orient="vertical", command=treeViwe_par.yview)
         scrollbar.pack(side="right", fill="y", pady=10)
-        tree_viwe_par.config(yscrollcommand=scrollbar.set)
-        tree_viwe_par.pack(side="left", fill="both", expand=True)
+        treeViwe_par.config(yscrollcommand=scrollbar.set)
+        treeViwe_par.pack(side="left", fill="both", expand=True)
         set_len_label = ttk.Label(subset_frame, text=f"تعداد کل زیر مجموعه ها : {2**len(set_obj)}", font=("B Morvarid", 15))
         if len(set_obj) > 10:
             set_len_label.config(text=f"تعداد کل زیر مجموعه ها : {2**len(set_obj)} تعداد محاسبه شده : 1024")
         set_len_label.pack(side="top", fill="none", padx=10, pady=10)
-        tree_viwe_sub = ttk.Treeview(subset_frame, columns=("members"))
-        tree_viwe_sub.heading("#0", text="زیر مجموعه")
-        tree_viwe_sub.heading("members", text="اعضاء")
-        tree_viwe_sub.column("#0", width=150)
-        tree_viwe_sub.column("members", width=250)
+        treeViwe_sub = ttk.Treeview(subset_frame, columns=("members"))
+        treeViwe_sub.heading("#0", text="زیر مجموعه")
+        treeViwe_sub.heading("members", text="اعضاء")
+        treeViwe_sub.column("#0", width=150)
+        treeViwe_sub.column("members", width=250)
         for subset_name, subset_items in SetsAlgorithm.subsets_one_set(set_obj).items():
-            parent = tree_viwe_sub.insert("", "end", text=subset_name, open=False)
+            parent = treeViwe_sub.insert("", "end", text=subset_name, open=False)
             number_loop = 1
             for item in subset_items:
-                # استفاده از set_to_str برای نمایش زیرمجموعه‌ها به شکل دلخواه
                 item_str = SetsAlgorithm.set_to_str(frozenset(item))
-                tree_viwe_sub.insert(parent, "end", text=number_loop, values=(item_str,))
+                treeViwe_sub.insert(parent, "end", text=number_loop, values=(item_str,))
                 number_loop += 1
-        scrollbar_sub = ttk.Scrollbar(subset_frame, orient="vertical", command=tree_viwe_sub.yview)
+        scrollbar_sub = ttk.Scrollbar(subset_frame, orient="vertical", command=treeViwe_sub.yview)
         scrollbar_sub.pack(side="right", fill="y", pady=10)
-        tree_viwe_sub.config(yscrollcommand=scrollbar_sub.set)
-        tree_viwe_sub.pack(side="left", expand=True, fill="both", padx=10, pady=10)
+        treeViwe_sub.config(yscrollcommand=scrollbar_sub.set)
+        treeViwe_sub.pack(side="left", expand=True, fill="both", padx=10, pady=10)
         self.exit_button.config(command=self.set_section)
         self.information_button.config(command=lambda: self.information("set_info_page"))
-
     def calc_metod_one_set(self):
         fixed_set = SetsAlgorithm.fix_set_variables(self.calc_var.get())
-        
         set_oop = SetsAlgorithm({f"{self.set_name.get()}": eval(SetsAlgorithm.parse_set_string(SetsAlgorithm.fix_set_variables(self.set.get())), {"__builtins__": {}, "frozenset": frozenset})})
-        result = set_oop.U_I_Ms_advance(fixed_set)
+        # استفاده از ThreadPoolExecutor برای اجرای محاسبه به صورت همزمان
+        with ThreadPoolExecutor() as executor:
+            future = executor.submit(set_oop.U_I_Ms_advance, fixed_set)
+            result = future.result()
         if result == self.set:
             result = "A"
         self.ruselt_label_part_2.config(text=result)
-
-
 
 App(tk.Tk())
 tk.mainloop()
