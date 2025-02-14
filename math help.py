@@ -33,133 +33,103 @@ class SetsAlgorithm:
         self.num_sets = len(self.sets)
 
     @staticmethod
+
+    @staticmethod
     def parse_set_string(s: str) -> str:
         def parse_expr(s: str, i: int):
-            """عبارت کلی (که ممکن است شامل مجموعه‌ها، عملگرها و اتم‌ها باشد) را از محل i پردازش می‌کند."""
             tokens = []
             while i < len(s):
                 if s[i].isspace():
                     i += 1
                     continue
                 if s[i] == '{':
-                    parsed_set, i = parse_set(s, i, nested=False)
+                    parsed_set, i = parse_set(s, i)
                     tokens.append(parsed_set)
                 elif s[i] in "|&-()":
                     tokens.append(s[i])
                     i += 1
                 else:
-                    # پردازش اتم (کلمه یا عدد)
                     start = i
                     while i < len(s) and s[i].isalnum():
                         i += 1
                     tokens.append(s[start:i])
             return " ".join(tokens), i
 
-        def parse_set(s: str, i: int, nested: bool):
-            """
-            مجموعه‌ای را که از s[i] شروع می‌شود (با '{') پردازش می‌کند.
-            اگر nested برابر True باشد، خروجی به صورت frozenset نمایش داده می‌شود.
-            """
-            # فرض می‌کنیم s[i] == '{'
-            i += 1  # رد کردن آکلاد باز
+        def parse_set(s: str, i: int):
+            i += 1  # رد کردن '{'
             elements = []
-            current_chars = []
+            current_token = ""
             while i < len(s):
                 if s[i].isspace():
                     i += 1
                     continue
                 if s[i] == '{':
-                    # اگر در حال ساخت یک اتم هستیم، آن را به لیست عناصر اضافه می‌کنیم
-                    if current_chars:
-                        token = "".join(current_chars).strip()
-                        if token:
-                            elements.append(token)
-                        current_chars = []
-                    # فراخوانی بازگشتی برای مجموعه تو در تو
-                    nested_set, i = parse_set(s, i, nested=True)
+                    nested_set, i = parse_set(s, i)
                     elements.append(nested_set)
                 elif s[i] == '}':
-                    if current_chars:
-                        token = "".join(current_chars).strip()
-                        if token:
-                            elements.append(token)
-                        current_chars = []
-                    i += 1  # رد کردن آکلاد بسته
-                    break
+                    if current_token:
+                        elements.append(current_token)
+                        current_token = ""
+                    i += 1  # رد کردن '}'
+                    inner = ", ".join(elements)
+                    return (f"frozenset({{{inner}}})", i)
                 elif s[i] == ',':
-                    if current_chars:
-                        token = "".join(current_chars).strip()
-                        if token:
-                            elements.append(token)
-                        current_chars = []
-                    i += 1  # رد کردن کاما
-                else:
-                    current_chars.append(s[i])
+                    if current_token:
+                        elements.append(current_token)
+                        current_token = ""
                     i += 1
-            # در صورت باقی ماندن کاراکترهایی، آن‌ها را اضافه می‌کنیم
-            if current_chars:
-                token = "".join(current_chars).strip()
-                if token:
-                    elements.append(token)
-            inner = ", ".join(elements)
-            return (f"frozenset({{{inner}}})", i) if nested else (f"{{{inner}}}", i)
-
+                else:
+                    current_token += s[i]
+                    i += 1
+            raise ValueError("بسته شدن آکلاد فراموش شده است.")
         parsed, _ = parse_expr(s, 0)
         return parsed
+
     @staticmethod
     def fix_set_variables(expression):
         """
-        پردازش عبارت ورودی:
-        - اگر توکن داخل {} باشد و عدد نباشد، کوتیشن می‌گیرد.
-        - اگر توکن خارج از {} باشد، کوتیشن نمی‌گیرد.
+        در این تابع ما با استفاده از یک شمارنده (nesting_level) تشخیص می‌دهیم که آیا
+        توکن در داخل آکلاد قرار دارد یا در سطح بالا.
+        اگر توکن در داخل آکلاد باشد (nesting_level > 0) و عدد نباشد، آن را داخل نقل قول قرار می‌دهیم.
         """
-        all_tokens = []          # ذخیره همه توکن‌ها
-        final_result = []        # ذخیره نتیجه نهایی
-        token = ""               # توکن موقت
-        inside_braces = False    # پرچم برای بررسی اینکه داخل {} هستیم یا نه
-
+        result = []
+        token = ""
+        nesting_level = 0
         for ch in expression:
             if ch == '{':
-                inside_braces = True
                 if token.strip():
-                    all_tokens.append(token.strip())
-                    final_result.append(token.strip())
+                    t = token.strip()
+                    if nesting_level > 0 and not t.isdigit() and not (t.startswith('"') and t.endswith('"')):
+                        t = f'"{t}"'
+                    result.append(t)
                     token = ""
-                final_result.append(ch)
-
+                result.append(ch)
+                nesting_level += 1
             elif ch == '}':
                 if token.strip():
-                    fixed_token = token.strip()
-                    all_tokens.append(fixed_token)
-                    # کوتیشن فقط برای توکن‌های غیرعددی داخل {}
-                    if inside_braces and not fixed_token.isdigit() and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
-                        fixed_token = f'"{fixed_token}"'
-                    final_result.append(fixed_token)
+                    t = token.strip()
+                    if nesting_level > 0 and not t.isdigit() and not (t.startswith('"') and t.endswith('"')):
+                        t = f'"{t}"'
+                    result.append(t)
                     token = ""
-                final_result.append(ch)
-                inside_braces = False
-
-            elif ch in ['|', '&', '-', '(', ')', ',']:
+                result.append(ch)
+                nesting_level = max(nesting_level - 1, 0)
+            elif ch in [',', '|', '&', '-', '(', ')']:
                 if token.strip():
-                    fixed_token = token.strip()
-                    all_tokens.append(fixed_token)
-                    if inside_braces and not fixed_token.isdigit() and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
-                        fixed_token = f'"{fixed_token}"'
-                    final_result.append(fixed_token)
+                    t = token.strip()
+                    if nesting_level > 0 and not t.isdigit() and not (t.startswith('"') and t.endswith('"')):
+                        t = f'"{t}"'
+                    result.append(t)
                     token = ""
-                final_result.append(ch)
-
+                result.append(ch)
             else:
                 token += ch
-
-        if token.strip():  # برای آخرین توکن باقی‌مانده
-            fixed_token = token.strip()
-            all_tokens.append(fixed_token)
-            if inside_braces and not fixed_token.isdigit() and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
-                fixed_token = f'"{fixed_token}"'
-            final_result.append(fixed_token)
-
-        return "".join(final_result)
+        if token.strip():
+            t = token.strip()
+            if nesting_level > 0 and not t.isdigit() and not (t.startswith('"') and t.endswith('"')):
+                t = f'"{t}"'
+            result.append(t)
+        return "".join(result)
 
     @staticmethod
     def to_frozenset(obj):
@@ -414,30 +384,27 @@ class init_chat_bot():
             "response_mime_type": "text/plain",
         }
         self.model_config()
-        self.chat_history=[]
     def model_config(self,model_name="gemini-2.0-flash-thinking-exp-01-21"):
         self.model_name=model_name
         self.model = genai.GenerativeModel(
             model_name=self.model_name,
             generation_config=self.generation_config,
-            tools='code_execution',
+            
+            tools='code_execution'if self.model_name!="tunedModels/z---gwdidy3wg436" else None
+
         )
+        if self.model_name!="tunedModels/z---gwdidy3wg436":
+            self.chat=self.model.start_chat(history={"role":"user","parts":[{"text":self.system_message}]})
+        else:
+            self.chat=self.model.start_chat(history=[])
     def send_message(self,user_message, reply_to=None):        
-        if reply_to:
-            formatted_message = f"Replying to: '{reply_to}'\nUser: {user_message}"
-        else:
-            formatted_message = user_message
-        self.chat_history.append({"role": "user", "message": formatted_message})
-        
-        # اگر مدل انتخاب‌شده "تربیت شده توسط ژوپیتر کد" باشد، پیام سیستم ارسال نمی‌شود.
-        if self.model_name == "tunedModels/z---gwdidy3wg436":
-            response = self.model.generate_content([msg["message"] for msg in self.chat_history])
-        else:
-            response = self.model.generate_content([self.system_message] + [msg["message"] for msg in self.chat_history])
+        response = self.chat.send_message(user_message)
         
         bot_reply = response.text.replace("Jupiter", "ژوپیتر").replace("code", "کد")
-        self.chat_history.append({"role": "assistant", "message": bot_reply})
+
         return bot_reply
+    def clear(self):
+        self.chat.history.clear()
 
 # ----------
 
@@ -458,7 +425,7 @@ class ChatFrame(ttk.Frame):
         super().__init__(container, *args, **kwargs)
         # ایجاد Canvas برای اسکرول کردن پیام‌ها
         self.Gemini_message_code=0
-        self.canvas = tk.Canvas(self, borderwidth=0, background=color,height=450,width=600)
+        self.canvas = tk.Canvas(self, borderwidth=0, background=color,height=450,width=550)
         self.frame = tk.Frame(self.canvas,padx=10,pady=10,background=color)
         self.vsb = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=self.vsb.set)
@@ -482,16 +449,17 @@ class ChatFrame(ttk.Frame):
         bubble_bg = "#003F88" if sender == "You" else "#FFB700"
         bubble = tk.Frame(self.frame, bg=bubble_bg, padx=10, pady=5)
         label = tk.Label(bubble, text=message, wraplength=400, justify="left",
-                         bg=bubble_bg, font=("B Morvarid", 12), fg="black")      
+                         bg=bubble_bg, font=("B Morvarid", 15), fg="black")      
         label.pack()
         anchor_side = "w" if sender == "You" else "e"
         bubble.pack(fill="x", padx=10, pady=5, anchor=anchor_side)
         self.canvas.yview_moveto(1.0)
         return label
-    def clear_messages(self):
+    def clear_messages(self,model):
         """حذف تمام پیام‌های موجود در پنل چت"""
         for widget in self.frame.winfo_children():
             widget.destroy()
+        model.clear()
     def repely(self):
         pass
 class App():
@@ -530,7 +498,6 @@ class App():
             self.theme_color_font_color = "black"
             self.them_color_border_color = "black"
         self.main_page()
-
     def main_page(self):
         if not hasattr(self, 'main_frame'):
             self.main_frame = ttk.Frame(self.root)
@@ -570,9 +537,11 @@ class App():
         if DNS_manager.check_internet()==False:
             return
         atexit.register(DNS_manager.reset_dns)
-        DNS_manager.set_dns(self=DNS_manager)
-        self.clear_screen()
         self.jupiter_ai_model=init_chat_bot()
+        self.jupiter_ai_model.chat.enable_automatic_function_calling
+        DNS_manager.set_dns(self=DNS_manager)
+        self.root.protocol("WM_DELETE_WINDOW", lambda: [DNS_manager.reset_dns(), self.root.destroy(),self.jupiter_ai_model.chat.history.clear])
+        self.clear_screen()
         main_ai_frame=tk.Frame(self.root)
         main_ai_frame.pack(side="bottom",expand=True,fill="both",padx=10 ,pady=10)
         user_input_frame=tk.Frame(main_ai_frame)
@@ -606,15 +575,12 @@ class App():
         input_frame.pack(side="top",padx=10, pady=10, fill="x")
         text_scrollbar = ttk.Scrollbar(input_frame, orient="vertical")
         self.input_ai = tk.Text(input_frame, height=5, borderwidth=0, relief="solid",background=self.theme_color, highlightthickness=2,highlightbackground=self.theme_color,highlightcolor=self.theme_color_border_color,font=("B Morvarid", 15), foreground=self.theme_color_font_color,yscrollcommand=text_scrollbar.set)  # اتصال اسکرول‌بار به تکست
-
-        # اتصال اسکرول‌بار به Text
         text_scrollbar.config(command=self.input_ai.yview)
-
         self.input_ai.pack(side="left", fill="both", expand=True, ipadx=10, ipady=10)
         text_scrollbar.pack(side="right", fill="y")
         self.chat_frame = ChatFrame(chats_message_frame, color=self.theme_color)
         self.chat_frame.pack(padx=10, pady=10, fill="both", expand=True)
-        delete_button = ttk.Button(user_input_frame, text="پاک کردن پیام ها", command=lambda:self.chat_frame.clear_messages())
+        delete_button = ttk.Button(user_input_frame, text="پاک کردن پیام ها", command=lambda:self.chat_frame.clear_messages(self.jupiter_ai_model))
         delete_button.pack(pady=5, padx=10, fill="x")
         send_button = ttk.Button(user_input_frame, text="ارسال", command=self.on_send)
         send_button.pack(pady=10, expand=True, fill="both", padx=10)
@@ -622,7 +588,6 @@ class App():
     def handle_response(self,user_message, gemini_label):
         response = self.jupiter_ai_model.send_message(user_message)
         self.root.after(0, lambda: gemini_label.config(text=response))
-
     def on_send(self):
         user_message = self.input_ai.get("1.0","end").strip()
         if user_message == "":
@@ -634,7 +599,6 @@ class App():
         self.input_ai.delete("1.0","end")
         # اجرای دریافت پاسخ به صورت غیرهمزمان (ترد)
         threading.Thread(target=self.handle_response, args=(user_message, gemini_label), daemon=True).start()
-    
     def update_model(self,event):
         global model, current_model_name
         selected_display = self.model_combobox.get()
@@ -679,7 +643,16 @@ class App():
         self.exit_button.config(text="صفحه قبل", command=self.main_page)
 
     def enter_L_equation(self):
-        pass
+        self.clear_screen()
+        frame_lins_info=ttk.Frame(self.root)
+        frame_lins_info.pack(side="top",expand=True,fill="both",padx=10,pady=10)
+        frame_lins_equation=ttk.Frame(frame_lins_info)
+        frame_lins_equation.pack(side="top",expand=True,fill="x",padx=10,pady=10)
+        frame_lins_name=ttk.Frame(frame_lins_info)
+        frame_lins_name.pack(side="top",expand=True,fill="x",padx=10 ,pady=10)
+        while True:
+            break
+    
 
     def about(self):
         pass
