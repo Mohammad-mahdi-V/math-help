@@ -8,13 +8,14 @@ import sv_ttk as sttk
 import darkdetect
 from tkinter import messagebox
 import google.generativeai as genai
-import os
+import subprocess
 import atexit
 import ctypes
 import sys
 import threading
 import socket
 from concurrent.futures import ThreadPoolExecutor  # برای اجرای همزمان
+import venn
 
 # -------------------------------------------
 # کلاس‌های مربوط به الگوریتم‌های مجموعه
@@ -34,98 +35,131 @@ class SetsAlgorithm:
     @staticmethod
     def parse_set_string(s: str) -> str:
         def parse_expr(s: str, i: int):
+            """عبارت کلی (که ممکن است شامل مجموعه‌ها، عملگرها و اتم‌ها باشد) را از محل i پردازش می‌کند."""
             tokens = []
             while i < len(s):
                 if s[i].isspace():
                     i += 1
                     continue
                 if s[i] == '{':
-                    parsed_set, i = parse_set(s, i)
+                    parsed_set, i = parse_set(s, i, nested=False)
                     tokens.append(parsed_set)
                 elif s[i] in "|&-()":
                     tokens.append(s[i])
                     i += 1
                 else:
+                    # پردازش اتم (کلمه یا عدد)
                     start = i
                     while i < len(s) and s[i].isalnum():
                         i += 1
                     tokens.append(s[start:i])
             return " ".join(tokens), i
 
-        def parse_set(s: str, i: int):
-            i += 1  # رد کردن '{'
+        def parse_set(s: str, i: int, nested: bool):
+            """
+            مجموعه‌ای را که از s[i] شروع می‌شود (با '{') پردازش می‌کند.
+            اگر nested برابر True باشد، خروجی به صورت frozenset نمایش داده می‌شود.
+            """
+            # فرض می‌کنیم s[i] == '{'
+            i += 1  # رد کردن آکلاد باز
             elements = []
-            current_token = ""
+            current_chars = []
             while i < len(s):
                 if s[i].isspace():
                     i += 1
                     continue
                 if s[i] == '{':
-                    nested_set, i = parse_set(s, i)
+                    # اگر در حال ساخت یک اتم هستیم، آن را به لیست عناصر اضافه می‌کنیم
+                    if current_chars:
+                        token = "".join(current_chars).strip()
+                        if token:
+                            elements.append(token)
+                        current_chars = []
+                    # فراخوانی بازگشتی برای مجموعه تو در تو
+                    nested_set, i = parse_set(s, i, nested=True)
                     elements.append(nested_set)
                 elif s[i] == '}':
-                    if current_token:
-                        elements.append(current_token)
-                        current_token = ""
-                    i += 1  # رد کردن '}'
-                    inner = ", ".join(elements)
-                    return (f"frozenset({{{inner}}})", i)
+                    if current_chars:
+                        token = "".join(current_chars).strip()
+                        if token:
+                            elements.append(token)
+                        current_chars = []
+                    i += 1  # رد کردن آکلاد بسته
+                    break
                 elif s[i] == ',':
-                    if current_token:
-                        elements.append(current_token)
-                        current_token = ""
-                    i += 1
+                    if current_chars:
+                        token = "".join(current_chars).strip()
+                        if token:
+                            elements.append(token)
+                        current_chars = []
+                    i += 1  # رد کردن کاما
                 else:
-                    current_token += s[i]
+                    current_chars.append(s[i])
                     i += 1
-            raise ValueError("بسته شدن آکلاد فراموش شده است.")
+            # در صورت باقی ماندن کاراکترهایی، آن‌ها را اضافه می‌کنیم
+            if current_chars:
+                token = "".join(current_chars).strip()
+                if token:
+                    elements.append(token)
+            inner = ", ".join(elements)
+            return (f"frozenset({{{inner}}})", i) if nested else (f"{{{inner}}}", i)
+
         parsed, _ = parse_expr(s, 0)
         return parsed
-
     @staticmethod
     def fix_set_variables(expression):
         """
-        در این تابع با استفاده از متغیر nesting_level مشخص می‌کنیم که توکن داخل آکلاد است یا نه.
-        اگر توکن در داخل آکلاد باشد (nesting_level > 0) و عدد نباشد، آن را داخل کوتیشن قرار می‌دهیم.
+        پردازش عبارت ورودی:
+        - اگر توکن داخل {} باشد و عدد نباشد، کوتیشن می‌گیرد.
+        - اگر توکن خارج از {} باشد، کوتیشن نمی‌گیرد.
         """
-        result = []
-        token = ""
-        nesting_level = 0
+        all_tokens = []          # ذخیره همه توکن‌ها
+        final_result = []        # ذخیره نتیجه نهایی
+        token = ""               # توکن موقت
+        inside_braces = False    # پرچم برای بررسی اینکه داخل {} هستیم یا نه
+
         for ch in expression:
             if ch == '{':
+                inside_braces = True
                 if token.strip():
-                    t = token.strip()
-                    if nesting_level > 0 and not t.isdigit() and not (t.startswith('"') and t.endswith('"')):
-                        t = f'"{t}"'
-                    result.append(t)
+                    all_tokens.append(token.strip())
+                    final_result.append(token.strip())
                     token = ""
-                result.append(ch)
-                nesting_level += 1
+                final_result.append(ch)
+
             elif ch == '}':
                 if token.strip():
-                    t = token.strip()
-                    if nesting_level > 0 and not t.isdigit() and not (t.startswith('"') and t.endswith('"')):
-                        t = f'"{t}"'
-                    result.append(t)
+                    fixed_token = token.strip()
+                    all_tokens.append(fixed_token)
+                    # کوتیشن فقط برای توکن‌های غیرعددی داخل {}
+                    if inside_braces and not fixed_token.isdigit() and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
+                        fixed_token = f'"{fixed_token}"'
+                    final_result.append(fixed_token)
                     token = ""
-                result.append(ch)
-                nesting_level = max(nesting_level - 1, 0)
-            elif ch in [',', '|', '&', '-', '(', ')']:
+                final_result.append(ch)
+                inside_braces = False
+
+            elif ch in ['|', '&', '-', '(', ')', ',']:
                 if token.strip():
-                    t = token.strip()
-                    if nesting_level > 0 and not t.isdigit() and not (t.startswith('"') and t.endswith('"')):
-                        t = f'"{t}"'
-                    result.append(t)
+                    fixed_token = token.strip()
+                    all_tokens.append(fixed_token)
+                    if inside_braces and not fixed_token.isdigit() and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
+                        fixed_token = f'"{fixed_token}"'
+                    final_result.append(fixed_token)
                     token = ""
-                result.append(ch)
+                final_result.append(ch)
+
             else:
                 token += ch
-        if token.strip():
-            t = token.strip()
-            if nesting_level > 0 and not t.isdigit() and not (t.startswith('"') and t.endswith('"')):
-                t = f'"{t}"'
-            result.append(t)
-        return "".join(result)
+
+        if token.strip():  # برای آخرین توکن باقی‌مانده
+            fixed_token = token.strip()
+            all_tokens.append(fixed_token)
+            if inside_braces and not fixed_token.isdigit() and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
+                fixed_token = f'"{fixed_token}"'
+            final_result.append(fixed_token)
+
+        return "".join(final_result)
 
     @staticmethod
     def to_frozenset(obj):
@@ -136,6 +170,7 @@ class SetsAlgorithm:
     @staticmethod
     def subsets_one_set(given_set):
         num_loop = 0
+        # اگر ورودی به صورت رشته نباشد، آن را به رشته تبدیل می‌کنیم
         if not isinstance(given_set, str):
             given_set = repr(given_set)
         given_set = eval(given_set)
@@ -173,17 +208,49 @@ class SetsAlgorithm:
                     break
             return partition_list
 
+    def U(self, bitmask):
+        return set().union(*(self.sets[i] for i in range(self.num_sets) if bitmask & (1 << i)))
+
+    def I(self, bitmask):
+        selected_sets = [self.sets[i] for i in range(self.num_sets) if bitmask & (1 << i)]
+        return set.intersection(*selected_sets)
+
+    def Ms(self, bitmask, target_bit):
+        main_set = self.sets[target_bit]
+        other_sets = self.U(bitmask & ~(1 << target_bit))
+        return main_set - other_sets
+
+    def check_other_information(self):
+        info = {
+            "set_lengths": {f"Set {i+1} length": len(s) for i, s in enumerate(self.sets)},
+            "subsets_info": {
+                f"Set {i+1}": {
+                    f"Set {j+1}": set(self.sets[i]).issubset(set(self.sets[j]))
+                    for j in range(self.num_sets) if i != j
+                }
+                for i in range(self.num_sets)
+            },
+            "all_sets_chain": all(
+                set(self.sets[i]).issubset(set(self.sets[j])) or set(self.sets[j]).issubset(set(self.sets[i]))
+                for i in range(self.num_sets) for j in range(i + 1, self.num_sets)
+            )
+        }
+        info["all_sets_antychain"] = not info["all_sets_chain"]
+        return info
+
     def U_I_Ms_advance(self, text):
         """
-        این متد عبارت ورودی کاربر (مثلاً اعمال مجموعه با عملگرهایی مانند اتحاد، اشتراک و تفاوت) را دریافت می‌کند.
-        ابتدا با fix_set_variables و parse_set_string به عبارتی صحیح تبدیل می‌شود؛ سپس با eval و دیکشنری مجموعه‌ها نتیجه محاسبه می‌شود.
+        این متد عبارت ورودی کاربر (با عملگرهایی مانند اتحاد، اشتراک و تفاوت) را دریافت می‌کند.
+        ابتدا ورودی با parse_set_string به عبارتی صحیح تبدیل می‌شود؛ سپس eval شده و در نهایت
+        نتیجه به صورت رشته‌ای با آکولاد (بدون ذکر "frozenset") به کاربر نمایش داده می‌شود.
         """
         text = text.replace('∩', '&').replace('∪', '|')
-        text = SetsAlgorithm.fix_set_variables(text)
+        text=SetsAlgorithm.fix_set_variables(text)
         allowed_chars = set(" {}(),|&-0123456789'\"")
         if not all(ch in allowed_chars or ch.isalpha() for ch in text):
-            messagebox.showerror("ارور", "خطا: کاراکترهای نامعتبر شناسایی شد.")
+            messagebox.showerror("ارور", "(جهت آشنایی با کاراکترهای پشتیبانی شده وارد بخش نحوه کار در این بخش شوید)خطا: کاراکترهای نامعتبر شناسایی شد.")
             return "در انتظار دریافت عبارت..."
+
         transformed_text = SetsAlgorithm.parse_set_string(text)
         variables = {name: frozenset(set_val) for name, set_val in self.set_of_sets.items()}
         try:
@@ -196,6 +263,7 @@ class SetsAlgorithm:
     @staticmethod
     def convert_set_item(item):
         if isinstance(item, frozenset):
+            # نمایش مجموعه تو در تو به صورت آکولادی بدون کلمه‌ی frozenset
             return "{" + ", ".join(SetsAlgorithm.convert_set_item(sub_item) for sub_item in item) + "}"
         return str(item)
 
@@ -219,22 +287,22 @@ class SetsAlgorithm:
                 '011': len(set_two & set_three - set_one),
                 '111': len(set_one & set_two & set_three)
             }
-            venn_obj = matplotlib_venn.venn3(subsets=subsets, set_labels=('Set 1', 'Set 2', 'Set 3'))
+            venn = matplotlib_venn.venn3(subsets=subsets, set_labels=('Set 1', 'Set 2', 'Set 3'))
             plt.title("Venn Diagram for Three Sets")
-            if venn_obj.get_label_by_id('100'):
-                venn_obj.get_label_by_id('100').set_text(set_one - set_two - set_three)
-            if venn_obj.get_label_by_id('010'):
-                venn_obj.get_label_by_id('010').set_text(set_two - set_one - set_three)
-            if venn_obj.get_label_by_id('110'):
-                venn_obj.get_label_by_id('110').set_text(set_one & set_two - set_three)
-            if venn_obj.get_label_by_id('001'):
-                venn_obj.get_label_by_id('001').set_text(set_three - set_one - set_two)
-            if venn_obj.get_label_by_id('101'):
-                venn_obj.get_label_by_id('101').set_text(set_one & set_three - set_two)
-            if venn_obj.get_label_by_id('011'):
-                venn_obj.get_label_by_id('011').set_text(set_two & set_three - set_one)
-            if venn_obj.get_label_by_id('111'):
-                venn_obj.get_label_by_id('111').set_text(set_one & set_two & set_three)
+            if venn.get_label_by_id('100'):
+                venn.get_label_by_id('100').set_text(set_one - set_two - set_three)
+            if venn.get_label_by_id('010'):
+                venn.get_label_by_id('010').set_text(set_two - set_one - set_three)
+            if venn.get_label_by_id('110'):
+                venn.get_label_by_id('110').set_text(set_one & set_two - set_three)
+            if venn.get_label_by_id('001'):
+                venn.get_label_by_id('001').set_text(set_three - set_one - set_two)
+            if venn.get_label_by_id('101'):
+                venn.get_label_by_id('101').set_text(set_one & set_three - set_two)
+            if venn.get_label_by_id('011'):
+                venn.get_label_by_id('011').set_text(set_two & set_three - set_one)
+            if venn.get_label_by_id('111'):
+                venn.get_label_by_id('111').set_text(set_one & set_two & set_three)
         elif self.num_sets == 2:
             set_one, set_two = self.sets
             subsets = {
@@ -242,22 +310,23 @@ class SetsAlgorithm:
                 '01': len(set_two - set_one),
                 '11': len(set_one & set_two)
             }
-            venn_obj = matplotlib_venn.venn2(subsets=subsets, set_labels=('Set 1', 'Set 2'))
+            venn = matplotlib_venn.venn2(subsets=subsets, set_labels=('Set 1', 'Set 2'))
             plt.title("Venn Diagram for Two Sets")
-            venn_obj.get_label_by_id('10').set_text(set_one - set_two)
-            venn_obj.get_label_by_id('01').set_text(set_two - set_one)
-            venn_obj.get_label_by_id('11').set_text(set_one & set_two)
+            venn.get_label_by_id('10').set_text(set_one - set_two)
+            venn.get_label_by_id('01').set_text(set_two - set_one)
+            venn.get_label_by_id('11').set_text(set_one & set_two)
         else:
             return
+
         if output_path:
             plt.savefig(output_path)
         plt.show()
 
     def draw_venn_4_more(self, output_path=None):
         venn_data = {self.set_names[i]: self.sets[i] for i in range(self.num_sets)}
-        from venn import venn  # فرض می‌کنیم ماژول venn موجود است
         venn(venn_data)
         plt.title(f"Venn Diagram for {self.num_sets} Sets")
+
         if output_path:
             plt.savefig(output_path)
         return self.get_region_info()
@@ -267,18 +336,22 @@ class SetsAlgorithm:
         sets_names = self.set_names
         sets_dict = self.set_of_sets
         n = self.num_sets
+
         for r in range(1, n + 1):
             for include in itertools.combinations(range(n), r):
                 included_sets = [sets_names[i] for i in include]
                 excluded_sets = [sets_names[i] for i in range(n) if i not in include]
+
                 region = set.intersection(*[sets_dict[name] for name in included_sets])
                 for name in excluded_sets:
                     region = region - sets_dict[name]
+
                 if region:
                     notation = '∩'.join(included_sets)
                     if excluded_sets:
                         notation += '-' + '-'.join(excluded_sets)
                     result[notation] = region
+
         return result
 
 # -------------------------------------------
@@ -286,27 +359,52 @@ class SetsAlgorithm:
 # -------------------------------------------
 class DNS_manager():
     def __init__(self):
-        if ctypes.windll.shell32.IsUserAnAdmin():
-            return
+        if not self.is_admin():
+            self.run_as_admin()
+    
+    @staticmethod
+    def is_admin():
+        """ بررسی می‌کند که آیا برنامه با دسترسی ادمین اجرا شده است یا خیر. """
+        try:
+            return ctypes.windll.shell32.IsUserAnAdmin()
+        except:
+            return False
+
+    @staticmethod
+    def run_as_admin():
+        """ اجرای مجدد برنامه با دسترسی ادمین در ویندوز. """
         ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
         sys.exit()
-    @staticmethod
+
     def check_internet():
-        messagebox.showinfo(title="بررسی اینترنت", message="ما میخواهیم چک کنیم تا متوجه شویم به اینترنت متصل هستید یا خیر. این فرایند چند ثانیه‌ای طول می‌کشد")
-        try:
-            socket.create_connection(("8.8.8.8", 53), timeout=1)
-            return True
-        except OSError:
-            messagebox.showerror(title="به اینترنت متصل نیستید", message="برای چت با هوش مصنوعی به اینترنت پایدار متصل شوید")
-            return False
-    def set_dns(self):
-        os.system('netsh interface ip set dns name="Wi-Fi" static 10.202.10.202')
-        os.system('netsh interface ip set dns name="Ethernet" static 10.202.10.202')
+        """ بررسی اتصال به اینترنت در یک ترد جداگانه. """
+        messagebox.showinfo(title="بررسی اینترنت", message="ما می‌خواهیم چک کنیم که آیا به اینترنت متصل هستید یا خیر. این فرایند چند ثانیه‌ای طول می‌کشد.")
+
+        def _check():
+            try:
+                socket.create_connection(("8.8.8.8", 53), timeout=1)
+                return True
+            except OSError:
+                messagebox.showerror(title="به اینترنت متصل نیستید", message="برای چت با هوش مصنوعی به اینترنت پایدار متصل شوید.")
+                return False
+        
+        threading.Thread(target=_check, daemon=True).start()
+
+    @staticmethod
+    def set_dns():
+        """ تنظیم DNS بدون باز شدن ترمینال. """
+        subprocess.run(['netsh', 'interface', 'ip', 'set', 'dns', 'name="Wi-Fi"', 'static', '10.202.10.202'],
+                       creationflags=subprocess.CREATE_NO_WINDOW)
+        subprocess.run(['netsh', 'interface', 'ip', 'set', 'dns', 'name="Ethernet"', 'static', '10.202.10.202'],
+                       creationflags=subprocess.CREATE_NO_WINDOW)
+
     @staticmethod
     def reset_dns():
-        os.system('netsh interface ip set dns name="Wi-Fi" dhcp')
-        os.system('netsh interface ip set dns name="Ethernet" dhcp')
-
+        """ بازگرداندن DNS به حالت اولیه بدون باز شدن ترمینال. """
+        subprocess.run(['netsh', 'interface', 'ip', 'set', 'dns', 'name="Wi-Fi"', 'dhcp'],
+                       creationflags=subprocess.CREATE_NO_WINDOW)
+        subprocess.run(['netsh', 'interface', 'ip', 'set', 'dns', 'name="Ethernet"', 'dhcp'],
+                       creationflags=subprocess.CREATE_NO_WINDOW)
 # -------------------------------------------
 # کلاس هوش مصنوعی (Chat Bot) با قابلیت استریمینگ
 # -------------------------------------------
@@ -470,7 +568,7 @@ class App():
             return
         atexit.register(DNS_manager.reset_dns)
         self.jupiter_ai_model = init_chat_bot()
-        DNS_manager.set_dns(self=DNS_manager)
+        DNS_manager.set_dns()
         self.root.protocol("WM_DELETE_WINDOW", lambda: [DNS_manager.reset_dns(), self.root.destroy(), self.jupiter_ai_model.chat.history.clear])
         self.clear_screen()
         main_ai_frame = tk.Frame(self.root)
@@ -572,10 +670,20 @@ class App():
         self.clear_screen()
         frame_lins_info = ttk.Frame(self.root)
         frame_lins_info.pack(side="top", expand=True, fill="both", padx=10, pady=10)
+        frame_lins_mode=ttk.Frame()
+        self.line_mode = tk.StringVar(value="equation")
+        line_raido_mode_eq = ttk.Radiobutton(frame_line1, text="معادله", variable=self.line1_mode, value="equation", command=self.update_line1_inputs)
+        line_raido_mode_pts = ttk.Radiobutton(frame_line1, text="نقطه‌ای", variable=self.line1_mode, value="points", command=self.update_line1_inputs)
+        rbtn_line1_eq.grid(row=0, column=0, sticky="w")
+        rbtn_line1_pts.grid(row=0, column=1, sticky="w")
+
         frame_lins_equation = ttk.Frame(frame_lins_info)
         frame_lins_equation.pack(side="top", expand=True, fill="x", padx=10, pady=10)
         frame_lins_name = ttk.Frame(frame_lins_info)
         frame_lins_name.pack(side="top", expand=True, fill="x", padx=10, pady=10)
+        self.lins_equation=tk.StringVar()
+        lins_equation_entry=ttk.Entry(frame_lins_equation,font=("B Morvarid",15),textvariable=self.lins_equation)
+        lins_equation_entry.pack(side="top")
         while True:
             break
     def about(self):
@@ -741,14 +849,14 @@ class App():
         self.information_button.config(command=lambda: self.information("set_info_page"))
     def calc_metod_one_set(self):
         fixed_set = SetsAlgorithm.fix_set_variables(self.calc_var.get())
+        
         set_oop = SetsAlgorithm({f"{self.set_name.get()}": eval(SetsAlgorithm.parse_set_string(SetsAlgorithm.fix_set_variables(self.set.get())), {"__builtins__": {}, "frozenset": frozenset})})
-        # استفاده از ThreadPoolExecutor برای اجرای محاسبه به صورت همزمان
-        with ThreadPoolExecutor() as executor:
-            future = executor.submit(set_oop.U_I_Ms_advance, fixed_set)
-            result = future.result()
+        result = set_oop.U_I_Ms_advance(fixed_set)
         if result == self.set:
             result = "A"
         self.ruselt_label_part_2.config(text=result)
+
+
 
 App(tk.Tk())
 tk.mainloop()
