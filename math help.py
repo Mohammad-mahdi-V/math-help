@@ -505,6 +505,7 @@ class App():
         style.configure("Treeview", font=("B Morvarid", 12))
         style.configure("TCombobox", font=("B Morvarid", 14))
         style.configure("TButtonRepely", font=("B Morvarid", 15))
+        style.configure("TRadiobutton", font=("B Morvarid", 20)) 
         self.root.option_add('*TCombobox*Listbox.font', ("B Morvarid", 13))
         sttk.use_light_theme()
         style.configure("TButton", font=("B Morvarid", 20), padding=10, foreground="black")
@@ -514,6 +515,8 @@ class App():
         style.configure("Treeview", font=("B Morvarid", 12))
         style.configure("TCombobox", font=("B Morvarid", 14))
         style.configure("TButtonRepely", font=("B Morvarid", 15))
+        style.configure("TRadiobutton", font=("B Morvarid", 20)) 
+
         self.root.option_add('*TCombobox*Listbox.font', ("B Morvarid", 13))
         sttk.set_theme(darkdetect.theme())
         self.switch_var = tk.BooleanVar()
@@ -668,24 +671,49 @@ class App():
         self.exit_button.config(text="صفحه قبل", command=self.main_page)
     def enter_L_equation(self):
         self.clear_screen()
-        frame_lins_info = ttk.Frame(self.root)
-        frame_lins_info.pack(side="top", expand=True, fill="both", padx=10, pady=10)
-        frame_lins_mode=ttk.Frame()
+        self.frame_lins_info = ttk.Frame(self.root)
+        self.frame_lins_info.pack(side="top", expand=True, fill="both", padx=10, pady=10)
+        num=1
+        line_num=ttk.Label(self.frame_lins_info,text=f": اطلاعات خط {num} را وارد کنید",font=("B Morvarid",15))
+        line_num.pack(side="top",expand=True,padx=10,pady=10)
+        frame_lins_mode=ttk.Frame(self.frame_lins_info)
+        frame_lins_mode.pack(side="top",expand=True,fill="both",padx=10,pady=10)
         self.line_mode = tk.StringVar(value="equation")
-        line_raido_mode_eq = ttk.Radiobutton(frame_line1, text="معادله", variable=self.line1_mode, value="equation", command=self.update_line1_inputs)
-        line_raido_mode_pts = ttk.Radiobutton(frame_line1, text="نقطه‌ای", variable=self.line1_mode, value="points", command=self.update_line1_inputs)
-        rbtn_line1_eq.grid(row=0, column=0, sticky="w")
-        rbtn_line1_pts.grid(row=0, column=1, sticky="w")
-
-        frame_lins_equation = ttk.Frame(frame_lins_info)
-        frame_lins_equation.pack(side="top", expand=True, fill="x", padx=10, pady=10)
-        frame_lins_name = ttk.Frame(frame_lins_info)
-        frame_lins_name.pack(side="top", expand=True, fill="x", padx=10, pady=10)
+        line_raido_mode_eq = ttk.Radiobutton(frame_lins_mode, text="معادله", variable=self.line_mode, value="equation", command=self.update_line_inputs)
+        line_raido_mode_pts = ttk.Radiobutton(frame_lins_mode, text="نقطه‌ای", variable=self.line_mode, value="points", command=self.update_line_inputs)
+        line_raido_mode_eq.pack(side="left",expand=True,padx=10,pady=10)
+        line_raido_mode_pts.pack(side="right",expand=True,padx=10,pady=10)
+        frame_lins_equation = ttk.Frame(self.frame_lins_info)
+        frame_lins_equation.pack(side="top", expand=True, fill="both", padx=10, pady=10)
         self.lins_equation=tk.StringVar()
-        lins_equation_entry=ttk.Entry(frame_lins_equation,font=("B Morvarid",15),textvariable=self.lins_equation)
-        lins_equation_entry.pack(side="top")
-        while True:
-            break
+        self.lins_equation_entry=ttk.Entry(frame_lins_equation,font=("B Morvarid",15),textvariable=self.lins_equation)
+        self.lins_equation_entry.pack(side="left",fill="both",expand=True,padx=10,pady=10)
+        self.label_lins_eq=ttk.Label(frame_lins_equation,font=("B Morvarid",15),text="معادله مورد نظر را وارد کنید")
+        self.label_lins_eq.pack(side="right",padx=10,pady=10)
+        btn_frame=ttk.Frame(self.frame_lins_info)
+        btn_frame.pack(side="bottom",fill="both",expand=True,padx=10,pady=10)
+        Prvious_btn=ttk.Button(btn_frame,text="خط قبلی")
+        Prvious_btn.pack(side="right",fill="x",expand=True,padx=10,pady=10)
+        next_btn=ttk.Button(btn_frame,text="ثبت اطلاعات و دریافت اطلاعات خط بعدی ")
+        next_btn.pack(side="right",fill="x",expand=True,padx=10,pady=10)
+        end_btn=ttk.Button(btn_frame,text="رسم خط")
+        end_btn.pack(side="left",fill="x",expand=True,padx=10,pady=10)
+    def update_line_inputs(self):
+        if self.line_mode.get()=="points":
+            self.frame_lins_pts=ttk.Frame(self.frame_lins_info)
+            self.frame_lins_pts.pack(side="top",expand=True,fill="both",padx=10,pady=10)
+            self.label_lins_eq.config(text="وارد کنید (x,y) نقطه اول را  به صورت ")
+            self.lins_pts=tk.StringVar()
+            self.lins_pts_entry=ttk.Entry(self.frame_lins_pts,font=("B Morvarid",15),textvariable=self.lins_pts)
+            self.lins_pts_entry.pack(side="left",fill="both",expand=True,padx=10,pady=10)
+            self.label_lins_pts=ttk.Label(self.frame_lins_pts,font=("B Morvarid",15),text="وارد کنید (x,y) نقطه دوم را  به صورت ")
+            self.label_lins_pts.pack(side="right",padx=10,pady=10)
+        else:
+            self.label_lins_eq.config(text="معادله مورد نظر را وارد کنید")
+            self.label_lins_pts.pack_forget()
+            self.lins_pts_entry.pack_forget()
+            self.frame_lins_pts.pack_forget()
+    
     def about(self):
         pass
     def information(self, page):
