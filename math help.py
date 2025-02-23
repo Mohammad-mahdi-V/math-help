@@ -1,31 +1,37 @@
-import itertools
-import more_itertools
+
+import time
+start_time = time.time()
+import threading
 import matplotlib.pyplot as plt
 import matplotlib_venn
+import venn
+import itertools
+import more_itertools
+import os
 import tkinter as tk
 import tkinter.ttk as ttk
 import sv_ttk as sttk
 import darkdetect
 from tkinter import messagebox
-import google.generativeai as genai
 import subprocess
 import atexit
 import ctypes
 import sys
-import threading
+import google.generativeai as genai
+
 import socket
-from concurrent.futures import ThreadPoolExecutor  # برای اجرای همزمان
-import venn
 
 # -------------------------------------------
 # کلاس‌های مربوط به الگوریتم‌های مجموعه
 # -------------------------------------------
 class SetsAlgorithm:
+    
     def __init__(self, set_of_sets):
         if isinstance(set_of_sets, dict):
             self.set_of_sets = set_of_sets
             self.set_names = list(set_of_sets.keys())
             self.sets = list(set_of_sets.values())
+
         else:
             self.set_of_sets = set_of_sets
             self.set_names = [f"Set {i+1}" for i in range(len(set_of_sets))]
@@ -276,6 +282,7 @@ class SetsAlgorithm:
         return str(result)
 
     def draw_venn(self, output_path=None):
+
         if self.num_sets == 3:
             set_one, set_two, set_three = self.sets
             subsets = {
@@ -358,17 +365,10 @@ class SetsAlgorithm:
 # کلاس‌های مربوط به تنظیم DNS و دسترسی ادمین
 # -------------------------------------------
 class DNS_manager():
-    def __init__(self):
-        if not self.is_admin():
-            self.run_as_admin()
-    
     @staticmethod
     def is_admin():
-        """ بررسی می‌کند که آیا برنامه با دسترسی ادمین اجرا شده است یا خیر. """
-        try:
-            return ctypes.windll.shell32.IsUserAnAdmin()
-        except:
-            return False
+        return os.getuid() == 0 if os.name != 'nt' else ctypes.windll.shell32.IsUserAnAdmin()
+
 
     @staticmethod
     def run_as_admin():
@@ -537,6 +537,52 @@ class App():
             self.theme_color_font_color = "black"
             self.them_color_border_color = "black"
         self.main_page()
+    def clear_screen(self, clear_main_frame=False, all=False, clear_footer=False):
+        try:
+            for widget in self.root.winfo_children():
+                if widget not in [getattr(self, 'main_frame', None),
+                                  getattr(self, 'frame_footer', None),
+                                  getattr(self, 'exit_button', None),
+                                  getattr(self, 'about_button', None),
+                                  getattr(self, 'information_button', None)]:
+                    widget.destroy()
+            if clear_footer:
+                self.frame_footer.destroy()
+            if clear_main_frame and hasattr(self, 'main_frame'):
+                if all:
+                    self.main_frame.destroy()
+                    self.main_frame = ttk.Frame(self.root)
+                    self.main_frame.pack(side='top', fill="both", expand=True)
+                else:
+                    for item in self.main_frame.winfo_children():
+                        if item != getattr(self, 'them_swiwch', None):
+                            item.destroy()
+        except tk.TclError:
+            self.main_frame = ttk.Frame(self.root)
+            self.main_frame.pack(side='top', fill="both", expand=True)
+        self.root.update_idletasks()
+    def about(self):
+        pass
+    def information(self, page):
+        pass
+
+    def change_theme(self):
+        if sttk.get_theme() == "dark":
+            sttk.use_light_theme()
+            self.theme_color = "#e3e3e3"
+            self.theme_color_font_color = "black"
+            self.them_color_border_color = "black"
+        elif sttk.get_theme() == "light":
+            sttk.use_dark_theme()
+            self.theme_color = "#2f2f2d"
+            self.theme_color_font_color = "white"
+            self.theme_color_border_color = "white"
+        try:
+            self.input_ai.config(background=self.theme_color, highlightthickness=2, highlightbackground=self.theme_color,fg=self.theme_color_font_color)
+            self.chat_frame.canvas.config(background=self.theme_color)
+            self.chat_frame.frame.config(background=self.theme_color)
+        except:
+            pass
     def main_page(self):
         if not hasattr(self, 'main_frame'):
             self.main_frame = ttk.Frame(self.root)
@@ -611,7 +657,7 @@ class App():
         input_frame = tk.Frame(user_input_frame)
         input_frame.pack(side="top", padx=10, pady=10, fill="x")
         text_scrollbar = ttk.Scrollbar(input_frame, orient="vertical")
-        self.input_ai = tk.Text(input_frame, height=7,width=50, borderwidth=0, relief="solid", background=self.theme_color,
+        self.input_ai = tk.Text(input_frame, height=7,width=50, borderwidth=0, relief="solid", background=self.theme_color,fg=self.theme_color_font_color,
                                  highlightthickness=2, highlightbackground=self.theme_color, highlightcolor=self.theme_color_border_color,
                                  font=("Vazirmatn RD light", 15), foreground=self.theme_color_font_color, yscrollcommand=text_scrollbar.set)
         text_scrollbar.config(command=self.input_ai.yview)
@@ -641,29 +687,7 @@ class App():
         selected_display = self.model_combobox.get()
         actual_model = self.model_options_mapping.get(selected_display, "gemini-2.0-flash-thinking-exp-01-21")
         self.jupiter_ai_model.model_config(model_name=actual_model)
-    def clear_screen(self, clear_main_frame=False, all=False, clear_footer=False):
-        try:
-            for widget in self.root.winfo_children():
-                if widget not in [getattr(self, 'main_frame', None),
-                                  getattr(self, 'frame_footer', None),
-                                  getattr(self, 'exit_button', None),
-                                  getattr(self, 'about_button', None),
-                                  getattr(self, 'information_button', None)]:
-                    widget.destroy()
-            if clear_footer:
-                self.frame_footer.destroy()
-            if clear_main_frame and hasattr(self, 'main_frame'):
-                if all:
-                    self.main_frame.destroy()
-                    self.main_frame = ttk.Frame(self.root)
-                    self.main_frame.pack(side='top', fill="both", expand=True)
-                else:
-                    for item in self.main_frame.winfo_children():
-                        if item != getattr(self, 'them_swiwch', None):
-                            item.destroy()
-        except tk.TclError:
-            self.main_frame = ttk.Frame(self.root)
-            self.main_frame.pack(side='top', fill="both", expand=True)
+
     def enter_sets(self):
         self.clear_screen(clear_main_frame=True)
         self.advance_var = tk.BooleanVar(value=False)
@@ -723,12 +747,7 @@ class App():
             self.lins_pts_entry.pack_forget()
             self.frame_lins_pts.pack_forget()
     
-    def about(self):
-        pass
-    def information(self, page):
-        pass
-    def sets_section(self):
-        pass
+
     def set_section(self):
         self.clear_screen()
         self.information_button.config(command=lambda: self.information("set_page"))
@@ -748,62 +767,22 @@ class App():
         name_label.pack(side="right", fill="none", expand=False, pady=10)
         self.set = tk.StringVar()
         self.set_name = tk.StringVar()
-        self.sets_entry = ttk.Entry(freame_entery_set_entry, font=("B Morvarid", 20), textvariable=self.set)
-        self.sets_entry.pack(side="top", fill="x", expand=True, padx=10, pady=10, ipadx=5, ipady=5)
-        self.sets_entry_name = ttk.Entry(freame_entery_name, font=("B Morvarid", 20), textvariable=self.set_name, 
+        self.set_entry = ttk.Entry(freame_entery_set_entry, font=("B Morvarid", 20), textvariable=self.set)
+        self.set_entry.pack(side="top", fill="x", expand=True, padx=10, pady=10, ipadx=5, ipady=5)
+        self.set_entry_name = ttk.Entry(freame_entery_name, font=("B Morvarid", 20), textvariable=self.set_name, 
                                           validate="key", validatecommand=(self.root.register(lambda text: len(text) <= 1), "%P"))
-        self.sets_entry_name.pack(side="top", fill="x", expand=True, padx=10, pady=10, ipadx=5, ipady=5)
+        self.set_entry_name.pack(side="top", fill="x", expand=True, padx=10, pady=10, ipadx=5, ipady=5)
         next_button = ttk.Button(self.root, text="بعدی", command=self.check_entry)
         next_button.pack(side="bottom", fill="x", expand=True, padx=20, pady=10)
-        scroolbar_set_entery = ttk.Scrollbar(freame_entery_set_entry, orient="horizontal", command=self.sets_entry.xview)
-        self.sets_entry.config(xscrollcommand=scroolbar_set_entery.set)
+        scroolbar_set_entery = ttk.Scrollbar(freame_entery_set_entry, orient="horizontal", command=self.set_entry.xview)
+        self.set_entry.config(xscrollcommand=scroolbar_set_entery.set)
         scroolbar_set_entery.pack(side="bottom", fill="x", expand=True, padx=10)
-    def change_theme(self):
-        if sttk.get_theme() == "dark":
-            sttk.use_light_theme()
-            self.theme_color = "#e3e3e3"
-            self.theme_color_font_color = "black"
-            self.them_color_border_color = "black"
-        elif sttk.get_theme() == "light":
-            sttk.use_dark_theme()
-            self.theme_color = "#2f2f2d"
-            self.theme_color_font_color = "white"
-            self.theme_color_border_color = "white"
-        try:
-            self.input_ai.config(background=self.theme_color, highlightthickness=2, highlightbackground=self.theme_color)
-            self.chat_frame.canvas.config(background=self.theme_color)
-            self.chat_frame.frame.config(background=self.theme_color)
-        except:
-            pass
-    def check_entry(self):
-        self.set_finall = self.set.get().strip()
-        if not (self.set_finall.startswith("{") and self.set_finall.endswith("}")):
-            messagebox.showerror("ERROR", "ورودی باید با { شروع و با } تمام شود")
-            return
-        self.set_finall = SetsAlgorithm.fix_set_variables(self.set_finall)
-        try:
-            transformed = SetsAlgorithm.parse_set_string(self.set_finall)
-            eval_set = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
-        except Exception as e:
-            messagebox.showerror("ERROR", f"فرمت مجموعه وارد شده نادرست است:\n{e}")
-            return
-        if not self.set_name.get() or self.set_name.get().isdigit():
-            messagebox.showerror("ERROR", "نمیتوانید نام مجموعه را خالی بگذارید یا عدد وارد کنید")
-            return
-        if self.set_name.get().islower():
-            messagebox.showwarning("Warning", "حروف به صورت بزرگ تبدیل شدند")
-            self.set_name.set(self.set_name.get().strip().upper())
-        self.set_info_page()
     def set_info_page(self):
         transformed = SetsAlgorithm.parse_set_string(self.set_finall)
-        try:
-            evaluated = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
-            set_obj = SetsAlgorithm.to_frozenset(evaluated)
-        except Exception as e:
-            messagebox.showerror("ERROR", f"خطا در ارزیابی مجموعه:\n{e}")
-            return
+        evaluated = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
+        set_obj = SetsAlgorithm.to_frozenset(evaluated)
+    
         set_name = self.set_name.get()
-        subsets = SetsAlgorithm.subsets_one_set(set_obj)
         partitions = SetsAlgorithm.partitions(set_obj)
         self.clear_screen()
         information_frame = tk.Frame(self.root)
@@ -894,6 +873,101 @@ class App():
         self.ruselt_label_part_2.config(text=result)
 
 
+    def sets_section(self):
+        self.clear_screen()
+        self.advance_swiwch.config(state="disabled")
+        self.frame_sets_info = ttk.Frame(self.root)
+        self.frame_sets_info.pack(side="left", expand=True, fill="both", padx=10, pady=10)
+        frame_treeViwe_sets=ttk.Frame(self.root)
+        frame_treeViwe_sets.pack(side="right", expand=True, fill="both", padx=10, pady=10)
+        self.treeViwe_sets= ttk.Treeview(frame_treeViwe_sets, columns=("number","members"))
+        self.treeViwe_sets.heading("#0", text="نام مجموعه")
+        self.treeViwe_sets.heading("number", text="شماره مجموعه")
+        self.treeViwe_sets.heading("members", text="اعضاء")
+        self.treeViwe_sets.column("#0", width=150,anchor="center")
+        self.treeViwe_sets.column("number", width=150,anchor="center")
+        self.treeViwe_sets.column("members", width=250)
+        scrollbar_sub = ttk.Scrollbar(frame_treeViwe_sets, orient="vertical", command=self.treeViwe_sets.yview)
+        scrollbar_sub.pack(side="right", fill="y", pady=10)
+        self.treeViwe_sets.config(yscrollcommand=scrollbar_sub.set)
+        self.treeViwe_sets.pack(side="left", expand=True, fill="both", padx=10, pady=10)
+        self.num=1
+        self.sets_dict={}
+        self.sets_num=ttk.Label(self.frame_sets_info,text=f": اطلاعات مجموعه {self.num} را وارد کنید ",font=("B Morvarid",15))
+        self.sets_num.pack(side="top",expand=True,padx=10,pady=10)
+        frame_set_member = ttk.Frame(self.frame_sets_info)
+        frame_set_member.pack(side="top", expand=True, fill="both", padx=10, pady=10)
+        frame_set_name = ttk.Frame(self.frame_sets_info)
+        frame_set_name.pack(side="top", expand=True, fill="both", padx=10, pady=10)
+        frame_set_member_entry_pakage=ttk.Frame(frame_set_member)
+        frame_set_member_entry_pakage.pack(side="left",fill="both",expand=True,padx=10,pady=10)
+        self.set=tk.StringVar()
+        self.set_member_entry=ttk.Entry(frame_set_member_entry_pakage,font=("B Morvarid",15),textvariable=self.set)
+        self.set_member_entry.pack(side="top",fill="both",expand=True,padx=10,pady=10)
+        scrollbar_horizontal = ttk.Scrollbar(frame_set_member_entry_pakage, orient="horizontal", command=self.set_member_entry.xview)
+        scrollbar_horizontal.pack(side="top",fill="x",expand=True,padx=10,pady=10)
+        self.set_member_entry.config(xscrollcommand=scrollbar_horizontal.set)
+        self.set_member_label=ttk.Label(frame_set_member,font=("B Morvarid",15),text="اعضای مجموعه را وارد کنید")
+        self.set_member_label.pack(side="right",padx=10,pady=10)
+        self.set_name=tk.StringVar()
+        self.set_name_entry=ttk.Entry(frame_set_name,font=("B Morvarid",15),textvariable=self.set_name)
+        self.set_name_entry.pack(side="left",fill="both",expand=True,padx=15,pady=10)
+        self.set_name_label=ttk.Label(frame_set_name,font=("B Morvarid",15),text="نام مجموعه را وارد کنید")
+        self.set_name_label.pack(side="right",padx=20,pady=10)
+        btn_frame=ttk.Frame(self.frame_sets_info)
+        btn_frame.pack(side="bottom",fill="both",expand=True,padx=10,pady=10)
+        self.next_btn=ttk.Button(btn_frame,text="ثبت اطلاعات و دریافت اطلاعات مجموعه بعدی ",command=lambda:self.next_set())
+        self.next_btn.pack(side="right",fill="x",expand=True,padx=10,pady=10)
+        self.end_btn=ttk.Button(btn_frame,text="اتمام")
+        self.end_btn.config(state="disabled")
+        self.end_btn.pack(side="left",fill="x",expand=True,padx=10,pady=10)
+        self.exit_button.config(text="صفحه قبل",command=self.enter_sets)
+    def prvious_set(self):
+        pass
+    def next_set(self):
+        if not self.check_entry(sets_section=True):
+            return
+        transformed = SetsAlgorithm.parse_set_string(self.set_finall)
+        evaluated = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
+        set_obj = SetsAlgorithm.to_frozenset(evaluated)
+        for key in self.sets_dict.keys():
+            if self.set_name.get()==self.sets_dict[key]["نام مجموعه"]:
+                messagebox.showerror("نام تکراری","نمی توانید از نام تکراری برای مجموعه استفاده کنید")
+                return
+        self.sets_dict[self.num]={"نام مجموعه":self.set_name.get(),"اعضای مجموعه":self.set_finall}
+        self.treeViwe_sets.insert("", "end", text=self.set_name.get(), values=(self.num,SetsAlgorithm.set_to_str(set_obj)))
+        self.num+=1
+        self.sets_num.config(text=f": اطلاعات مجموعه {self.num} را وارد کنید ")
+        self.end_btn.config(state="normall")
+        self.exit_button.config(text="مجموعه قبل",command=lambda:self.prvious_set())
+        if self.num==6 and self.advance_var.get():
+            self.next_btn.config(state="disabled")
+        elif self.num==4 and not self.advance_swiwch.get():
+            self.next_btn.config(state="disabled")
+    def check_entry(self,sets_section=False):
+        self.set_finall = self.set.get().strip()
+        if not (self.set_finall.startswith("{") and self.set_finall.endswith("}")):
+            messagebox.showerror("ERROR", "ورودی باید با { شروع و با } تمام شود")
+            return False
+        self.set_finall = SetsAlgorithm.fix_set_variables(self.set_finall)
+        try:
+            transformed = SetsAlgorithm.parse_set_string(self.set_finall)
+            eval_set = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
+        except Exception as e:
+            messagebox.showerror("ERROR", f"فرمت مجموعه وارد شده نادرست است:\n{e}")
+            return False
+        if not self.set_name.get() or self.set_name.get().isdigit():
+            messagebox.showerror("ERROR", "نمیتوانید نام مجموعه را خالی بگذارید یا عدد وارد کنید")
+            return False
+        if self.set_name.get().islower():
+            messagebox.showwarning("Warning", "حروف به صورت بزرگ تبدیل شدند")
+            self.set_name.set(self.set_name.get().strip().upper())
+        if not sets_section:
+            self.set_info_page()
+        return True
 
+
+end_time = time.time()
+print(f"زمان اجرای import ها بعد از بهینه‌سازی: {end_time - start_time:.3f} ثانیه")
 App(tk.Tk())
 tk.mainloop()
