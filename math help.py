@@ -2,12 +2,12 @@
 import time
 start_time = time.time()
 import threading
-import matplotlib.pyplot as plt
-import matplotlib_venn
+from matplotlib.pyplot import title ,show,savefig
+from matplotlib_venn import venn2, venn3
 import venn
-import itertools
-import more_itertools
-import os
+from itertools import combinations
+from more_itertools.more import set_partitions
+import os 
 import tkinter as tk
 import tkinter.ttk as ttk
 import sv_ttk as sttk
@@ -17,7 +17,8 @@ import subprocess
 import atexit
 import ctypes
 import sys
-import google.generativeai as genai
+from google.generativeai.generative_models import GenerativeModel
+from google.generativeai.client import configure
 
 import socket
 
@@ -75,7 +76,6 @@ class SetsAlgorithm:
                     i += 1
                     continue
                 if s[i] == '{':
-                    # اگر در حال ساخت یک اتم هستیم، آن را به لیست عناصر اضافه می‌کنیم
                     if current_chars:
                         token = "".join(current_chars).strip()
                         if token:
@@ -90,7 +90,7 @@ class SetsAlgorithm:
                         if token:
                             elements.append(token)
                         current_chars = []
-                    i += 1  # رد کردن آکلاد بسته
+                    i += 1  
                     break
                 elif s[i] == ',':
                     if current_chars:
@@ -187,7 +187,7 @@ class SetsAlgorithm:
         for i in range(len(given_set) + 1):
             if num_loop > 10:
                 break
-            for subset in itertools.combinations(given_set, i):
+            for subset in combinations(given_set, i):
                 subsets_dict[f" زیرمجموعه{i}عضوی"].append(subset)
             num_loop += 1
         return subsets_dict
@@ -202,11 +202,11 @@ class SetsAlgorithm:
     @staticmethod
     def partitions(given_set):
         if len(given_set) <= 5:
-            return list(more_itertools.set_partitions(given_set))
+            return list(set_partitions(given_set))
         else:
             partition_list = []
             partition_loop = 0
-            for partition in more_itertools.set_partitions(given_set):
+            for partition in set_partitions(given_set):
                 if partition_loop <= 100:
                     partition_list.append(partition)
                     partition_loop += 1
@@ -294,8 +294,8 @@ class SetsAlgorithm:
                 '011': len(set_two & set_three - set_one),
                 '111': len(set_one & set_two & set_three)
             }
-            venn = matplotlib_venn.venn3(subsets=subsets, set_labels=('Set 1', 'Set 2', 'Set 3'))
-            plt.title("Venn Diagram for Three Sets")
+            venn = venn3(subsets=subsets, set_labels=('Set 1', 'Set 2', 'Set 3'))
+            title("Venn Diagram for Three Sets")
             if venn.get_label_by_id('100'):
                 venn.get_label_by_id('100').set_text(set_one - set_two - set_three)
             if venn.get_label_by_id('010'):
@@ -317,8 +317,8 @@ class SetsAlgorithm:
                 '01': len(set_two - set_one),
                 '11': len(set_one & set_two)
             }
-            venn = matplotlib_venn.venn2(subsets=subsets, set_labels=('Set 1', 'Set 2'))
-            plt.title("Venn Diagram for Two Sets")
+            venn = venn2(subsets=subsets, set_labels=('Set 1', 'Set 2'))
+            title("Venn Diagram for Two Sets")
             venn.get_label_by_id('10').set_text(set_one - set_two)
             venn.get_label_by_id('01').set_text(set_two - set_one)
             venn.get_label_by_id('11').set_text(set_one & set_two)
@@ -326,16 +326,16 @@ class SetsAlgorithm:
             return
 
         if output_path:
-            plt.savefig(output_path)
-        plt.show()
+            savefig(output_path)
+        show()
 
     def draw_venn_4_more(self, output_path=None):
         venn_data = {self.set_names[i]: self.sets[i] for i in range(self.num_sets)}
         venn(venn_data)
-        plt.title(f"Venn Diagram for {self.num_sets} Sets")
+        title(f"Venn Diagram for {self.num_sets} Sets")
 
         if output_path:
-            plt.savefig(output_path)
+            savefig(output_path)
         return self.get_region_info()
 
     def get_region_info(self):
@@ -345,7 +345,7 @@ class SetsAlgorithm:
         n = self.num_sets
 
         for r in range(1, n + 1):
-            for include in itertools.combinations(range(n), r):
+            for include in combinations(range(n), r):
                 included_sets = [sets_names[i] for i in include]
                 excluded_sets = [sets_names[i] for i in range(n) if i not in include]
 
@@ -410,7 +410,7 @@ class DNS_manager():
 # -------------------------------------------
 class init_chat_bot():
     def __init__(self):
-        genai.configure(api_key="AIzaSyBCpiTAYNcd1qTIup_sfcI8lB9oI_klN9Y")
+        configure(api_key="AIzaSyBCpiTAYNcd1qTIup_sfcI8lB9oI_klN9Y")
         self.system_message = """پیام سیستم این پیام کاربر نیست این پیام سیستم است:::
         شما یک دستیار مفید به نام "ژوپیتر" هستید.
         همیشه به فارسی پاسخ دهید.
@@ -437,7 +437,7 @@ class init_chat_bot():
         self.model_config()
     def model_config(self, model_name="gemini-2.0-flash-thinking-exp-01-21"):
         self.model_name = model_name
-        self.model = genai.GenerativeModel(
+        self.model = GenerativeModel(
             model_name=self.model_name,
             generation_config=self.generation_config,
             tools='code_execution' if self.model_name != "tunedModels/z---gwdidy3wg436" else None
@@ -752,7 +752,6 @@ class App():
         self.clear_screen()
         self.information_button.config(command=lambda: self.information("set_page"))
         self.exit_button.config(text="صفحه قبل", command=self.enter_sets)
-        self.advance_swiwch.config(state="disabled")
         frame_section_set = tk.Frame(self.root)
         frame_section_set.pack(side="top", fill="both", expand=True, padx=10, pady=10)
         freame_entery_set = ttk.Frame(frame_section_set)
@@ -781,7 +780,7 @@ class App():
         transformed = SetsAlgorithm.parse_set_string(self.set_finall)
         evaluated = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
         set_obj = SetsAlgorithm.to_frozenset(evaluated)
-    
+        self.advance_swiwch.config(state="disabled")
         set_name = self.set_name.get()
         partitions = SetsAlgorithm.partitions(set_obj)
         self.clear_screen()
@@ -875,7 +874,7 @@ class App():
 
     def sets_section(self):
         self.clear_screen()
-        self.advance_swiwch.config(state="disabled")
+        self.advance_swiwch.config(command=self.change_state)
         self.frame_sets_info = ttk.Frame(self.root)
         self.frame_sets_info.pack(side="left", expand=True, fill="both", padx=10, pady=10)
         frame_treeViwe_sets=ttk.Frame(self.root)
@@ -902,48 +901,176 @@ class App():
         frame_set_member_entry_pakage=ttk.Frame(frame_set_member)
         frame_set_member_entry_pakage.pack(side="left",fill="both",expand=True,padx=10,pady=10)
         self.set=tk.StringVar()
-        self.set_member_entry=ttk.Entry(frame_set_member_entry_pakage,font=("B Morvarid",15),textvariable=self.set)
-        self.set_member_entry.pack(side="top",fill="both",expand=True,padx=10,pady=10)
+        self.set_member_entry=ttk.Entry(frame_set_member_entry_pakage,font=("B Morvarid",20),textvariable=self.set)
+        self.set_member_entry.pack(side="top",fill="both",expand=True,padx=10,pady=10,ipadx=5, ipady=5)
         scrollbar_horizontal = ttk.Scrollbar(frame_set_member_entry_pakage, orient="horizontal", command=self.set_member_entry.xview)
         scrollbar_horizontal.pack(side="top",fill="x",expand=True,padx=10,pady=10)
         self.set_member_entry.config(xscrollcommand=scrollbar_horizontal.set)
         self.set_member_label=ttk.Label(frame_set_member,font=("B Morvarid",15),text="اعضای مجموعه را وارد کنید")
         self.set_member_label.pack(side="right",padx=10,pady=10)
         self.set_name=tk.StringVar()
-        self.set_name_entry=ttk.Entry(frame_set_name,font=("B Morvarid",15),textvariable=self.set_name)
-        self.set_name_entry.pack(side="left",fill="both",expand=True,padx=15,pady=10)
+        self.set_name_entry=ttk.Entry(frame_set_name,font=("B Morvarid",20),textvariable=self.set_name)
+        self.set_name_entry.pack(side="left",fill="both",expand=True,padx=20,pady=10,ipadx=5, ipady=5)
         self.set_name_label=ttk.Label(frame_set_name,font=("B Morvarid",15),text="نام مجموعه را وارد کنید")
         self.set_name_label.pack(side="right",padx=20,pady=10)
         btn_frame=ttk.Frame(self.frame_sets_info)
         btn_frame.pack(side="bottom",fill="both",expand=True,padx=10,pady=10)
-        self.next_btn=ttk.Button(btn_frame,text="ثبت اطلاعات و دریافت اطلاعات مجموعه بعدی ",command=lambda:self.next_set())
+        self.next_btn=ttk.Button(btn_frame,text="ثبت اطلاعات و دریافت اطلاعات مجموعه بعدی ",command=self.next_set)
         self.next_btn.pack(side="right",fill="x",expand=True,padx=10,pady=10)
-        self.end_btn=ttk.Button(btn_frame,text="اتمام")
+        self.end_btn=ttk.Button(btn_frame,text="ثبت و اتمام",command=self.end_set)
         self.end_btn.config(state="disabled")
         self.end_btn.pack(side="left",fill="x",expand=True,padx=10,pady=10)
         self.exit_button.config(text="صفحه قبل",command=self.enter_sets)
+    def end_set(self):
+        for key in self.sets_dict.keys():
+            if self.set_name.get().upper()==self.sets_dict[key]["نام مجموعه"]:
+                messagebox.showerror("نام تکراری","نمی توانید از نام تکراری برای مجموعه استفاده کنید")
+                return
+        if not self.check_entry(sets_section=True):
+            return
+        self.sets_dict[self.num]={"نام مجموعه":self.set_name.get().upper(),"اعضای مجموعه":self.set_finall}
+        self.sets_displey()
     def prvious_set(self):
-        pass
+        if not messagebox.askyesno("حذف مجموعه فعلی","با ای کار مجموعه فعلی شما حذف خواهد شد"):
+            return
+        self.sets_dict.pop(self.num-1)
+        self.treeViwe_sets.delete(self.treeViwe_sets.get_children()[-1])
+        if self.num<=6 and self.advance_var.get():
+            self.next_btn.config(state="normall")
+        elif self.num<=3 and not self.advance_var.get():
+            self.next_btn.config(state="normall")
+        self.num-=1
+        if self.num>4:
+            self.advance_swiwch.config(state="normall")
+        self.sets_num.config(text=f": اطلاعات مجموعه {self.num} را وارد کنید ")
+
+    def change_state(self):
+        if self.num<6 and self.advance_var.get():
+            self.next_btn.config(state="normall")
+        elif self.num>=3 and not self.advance_var.get():
+            self.next_btn.config(state="disabled")
+
     def next_set(self):
+        for key in self.sets_dict.keys():
+            if self.set_name.get().upper()==self.sets_dict[key]["نام مجموعه"]:
+                messagebox.showerror("نام تکراری","نمی توانید از نام تکراری برای مجموعه استفاده کنید")
+                return
         if not self.check_entry(sets_section=True):
             return
         transformed = SetsAlgorithm.parse_set_string(self.set_finall)
         evaluated = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
         set_obj = SetsAlgorithm.to_frozenset(evaluated)
-        for key in self.sets_dict.keys():
-            if self.set_name.get()==self.sets_dict[key]["نام مجموعه"]:
-                messagebox.showerror("نام تکراری","نمی توانید از نام تکراری برای مجموعه استفاده کنید")
-                return
-        self.sets_dict[self.num]={"نام مجموعه":self.set_name.get(),"اعضای مجموعه":self.set_finall}
+
+        self.sets_dict[self.num]={"نام مجموعه":self.set_name.get().upper(),"اعضای مجموعه":self.set_finall}
         self.treeViwe_sets.insert("", "end", text=self.set_name.get(), values=(self.num,SetsAlgorithm.set_to_str(set_obj)))
+        self.set_name.set("")
+        self.set.set("")
         self.num+=1
         self.sets_num.config(text=f": اطلاعات مجموعه {self.num} را وارد کنید ")
         self.end_btn.config(state="normall")
         self.exit_button.config(text="مجموعه قبل",command=lambda:self.prvious_set())
         if self.num==6 and self.advance_var.get():
             self.next_btn.config(state="disabled")
-        elif self.num==4 and not self.advance_swiwch.get():
+            messagebox.showinfo("یک عدد تا اتمام ظرفیت","در حالت ادونس نمی توانید بیش از 6 عدد مجموعه وارد کنید")
+        elif self.num==3 and not self.advance_var.get():
+            messagebox.showinfo("یک عدد تااتمام ظرفیت"," در حالت نرمال نمیتوانید بیش از 3 عدد مجموعه وارد کنید")
             self.next_btn.config(state="disabled")
+        elif self.num==4 and self.advance_var.get():
+            continue_sets_receive=messagebox.askyesno("حالت ادونسید الزامی ","دیگر نخواهید توانست بین حالت نرمال و پیشرفته سویچ کنید ایا مایل به ادامه  هستید")
+            if continue_sets_receive:
+                self.advance_swiwch.config(state="disabled")
+            else:
+                self.advance_var.set(False)
+                self.next_btn.config(state="disabled")
+    def sets_displey(self):
+        self.advance_swiwch.config(state="disabled")
+        self.clear_screen()
+        tab_sets=ttk.Notebook(self.root)
+        tab_sets.pack(side="top",fill="both",expand=True,padx=10,pady=10)
+        for key , item in self.sets_dict.items():
+            transformed = SetsAlgorithm.parse_set_string(item["اعضای مجموعه"])
+            evaluated = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
+            set_obj = SetsAlgorithm.to_frozenset(evaluated)
+            partitions=SetsAlgorithm.partitions(set_obj)
+            information_frame = tk.Frame(self.root)
+            information_frame.pack(side="top", fill="both", expand=True, padx=10, pady=10)
+            tab_sets.add(information_frame,text=f"مجموعه شماره : {key}")
+            information_set = tk.Frame(information_frame)
+            information_set.pack(side="top", fill="both", expand=True, padx=10, pady=10)
+            tab_info = ttk.Notebook(information_frame)
+            tab_info.pack(side="bottom", fill="both", expand=True, padx=10, pady=10)
+            name_label = ttk.Label(information_set, text=f"{item["نام مجموعه"]} : نام مجموعه ", font=("B Morvarid", 15))
+            name_label.pack(side="right", fill="none", expand=True, padx=10)
+            set_label = ttk.Label(information_set, text=f"{SetsAlgorithm.set_to_str(set_obj)} : اعضای مجموعه ", font=("B Morvarid", 15))
+            set_label.pack(side="left", fill="none", expand=True, padx=10)
+            set_len = ttk.Label(information_set, text=f"{len(set_obj)} :  طول مجموعه ", font=("B Morvarid", 15))
+            set_len.pack(side="bottom", fill="none", padx=10, pady=10)
+            partition_frame = tk.Frame(tab_info)
+            subset_frame = tk.Frame(tab_info)
+            tab_info.config(height=275)
+            tab_info.add(partition_frame, text="افراز ها")
+            tab_info.add(subset_frame, text="زیر مجموعه ها")
+            treeViwe_par = ttk.Treeview(partition_frame, columns=("par"))
+            treeViwe_par.heading("#0", text="شماره افراز")
+            treeViwe_par.heading("par", text=" اعضای افراز")
+            treeViwe_par.column("#0", width=50)
+            treeViwe_par.column("par", width=100)
+            for i, partition in enumerate(partitions):
+                partition_str = " , ".join([SetsAlgorithm.set_to_str(frozenset(subset)) for subset in partition])
+                partition_str = f"{{{{{partition_str}}}}}"
+                treeViwe_par.insert("", "end", text=str(i+1), values=(partition_str))
+                scrollbar = ttk.Scrollbar(partition_frame, orient="vertical", command=treeViwe_par.yview)
+                scrollbar.pack(side="right", fill="y", pady=10)
+                treeViwe_par.config(yscrollcommand=scrollbar.set)
+                treeViwe_par.pack(side="left", fill="both", expand=True)
+                set_len_label = ttk.Label(subset_frame, text=f"تعداد کل زیر مجموعه ها : {2**len(set_obj)}", font=("B Morvarid", 15))
+                if len(set_obj) > 10:
+                    set_len_label.config(text=f"تعداد کل زیر مجموعه ها : {2**len(set_obj)} تعداد محاسبه شده : 1024")
+                set_len_label.pack(side="top", fill="none", padx=10, pady=10)
+                treeViwe_sub = ttk.Treeview(subset_frame, columns=("members"))
+                treeViwe_sub.heading("#0", text="زیر مجموعه")
+                treeViwe_sub.heading("members", text="اعضاء")
+                treeViwe_sub.column("#0", width=150)
+                treeViwe_sub.column("members", width=250)
+                for subset_name, subset_items in SetsAlgorithm.subsets_one_set(set_obj).items():
+                    parent = treeViwe_sub.insert("", "end", text=subset_name, open=False)
+                    number_loop = 1
+                    for item_s in subset_items:
+                        item_str = SetsAlgorithm.set_to_str(frozenset(item_s))
+                        treeViwe_sub.insert(parent, "end", text=number_loop, values=(item_str,))
+                        number_loop += 1
+                scrollbar_sub = ttk.Scrollbar(subset_frame, orient="vertical", command=treeViwe_sub.yview)
+                scrollbar_sub.pack(side="right", fill="y", pady=10)
+                treeViwe_sub.config(yscrollcommand=scrollbar_sub.set)
+                treeViwe_sub.pack(side="left", expand=True, fill="both", padx=10, pady=10)
+        self.exit_button.config(command=self.sets_section)
+        self.information_button.config(command=lambda: self.information("set_info_page"))
+        # if self.advance_var.get():
+        #     sets_calc_frame = tk.Frame(information_set)
+        #     sets_calc_frame.pack(side="bottom", fill="both", expand=True)
+        #     calc_label = ttk.Label(sets_calc_frame, text="برای محاسبه اعمال مجموعه عبارت مورد نظر را وارد کنید ", font=("B Morvarid", 20), justify="center")
+        #     calc_label.pack(side="top", fill="y", expand=True, padx=10)
+        #     self.calc_var = tk.StringVar()
+        #     entry_frame = tk.Frame(sets_calc_frame)
+        #     entry_frame.pack(side="top", expand=True, fill="x")
+        #     calc_entry = ttk.Entry(entry_frame, font=("B Morvarid", 23), textvariable=self.calc_var)
+        #     calc_entry.pack(side="right", expand=True, fill="both", padx=10, pady=10, ipadx=10, ipady=10)
+        #     calc_scrollbar = ttk.Scrollbar(entry_frame, orient="horizontal", command=calc_entry.xview)
+        #     calc_entry.config(xscrollcommand=calc_scrollbar.set)
+        #     calc_scrollbar.pack(side="bottom", fill="x")
+        #     ruselt_frame = tk.Frame(sets_calc_frame)
+        #     ruselt_frame.pack(side="top", expand=True, fill="both")
+        #     ruselt_label_part_1 = ttk.Label(ruselt_frame, text=": جواب", font=("B Morvarid", 20))
+        #     ruselt_label_part_1.pack(side="right", expand=True, fill="y")
+        #     self.ruselt_label_part_2 = ttk.Label(ruselt_frame, text="...در انتظار دریافت عبارت", font=("B Morvarid", 20))
+        #     self.ruselt_label_part_2.pack(side="left", expand=True, fill="y")
+        #     calc_btn = ttk.Button(entry_frame, text="محاسبه", command=self.calc_metod_one_set)
+        #     calc_btn.pack(side="left", expand=True, fill="both", padx=10, pady=10)
+        #     tab_info.pack(side="right", fill="both", expand=True, padx=10, pady=10)
+        #     information_set.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+        # else:
+        #     tab_info.pack(side="bottom", fill="both", expand=True, padx=10, pady=10)
+        #     information_set.pack(side="top", fill="both", expand=True, padx=10, pady=10)
     def check_entry(self,sets_section=False):
         self.set_finall = self.set.get().strip()
         if not (self.set_finall.startswith("{") and self.set_finall.endswith("}")):
