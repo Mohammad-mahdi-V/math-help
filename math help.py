@@ -320,6 +320,8 @@ class SetsAlgorithm:
 
         # تعریف متغیرهای موجود
         variables = {name: frozenset(set_val) for name, set_val in self.set_of_sets.items()}
+        # اضافه کردن نسخه‌های با حروف کوچک
+        variables.update({name.lower(): frozenset(set_val) for name, set_val in self.set_of_sets.items()})
 
         try:
             result = eval(transformed_text, {"__builtins__": {}, "frozenset": frozenset}, variables)
@@ -630,7 +632,7 @@ class App():
         style = sttk.ttk.Style()
         sttk.use_dark_theme()
         style.configure("TButton", font=("B Morvarid", 20), padding=10, foreground="white")
-        style.configure("TButton.notebook", font=("B Morvarid", 10), padding=10, foreground="white")
+        style.configure("CalcAdvanc.TButton", font=("B Morvarid", 15))
         style.configure("Switch.TCheckbutton", font=("B Morvarid", 15), padding=0)
         style.configure("TNotebook.Tab", font=("B Morvarid", 15), padding=5, borderwidth=0, relief="flat", highlightthickness=0, anchor="center")
         style.configure("Treeview.Heading", font=("B Morvarid", 14, "bold"))
@@ -639,7 +641,7 @@ class App():
         style.configure("TButtonRepely", font=("B Morvarid", 15))
         style.configure("TRadiobutton", font=("B Morvarid", 20)) 
         sttk.use_light_theme()
-        style.configure("TButton.notebook", font=("B Morvarid", 10), padding=10, foreground="white")
+        style.configure("CalcAdvanc.TButton", font=("B Morvarid", 15))
         style.configure("TButton", font=("B Morvarid", 20), padding=10, foreground="black")
         style.configure("Switch.TCheckbutton", font=("B Morvarid", 15), padding=0)
         style.configure("TNotebook.Tab", font=("B Morvarid", 15), padding=5, borderwidth=0, relief="flat", highlightthickness=0, anchor="center")
@@ -817,7 +819,10 @@ class App():
 
     def enter_sets(self):
         self.clear_screen(clear_main_frame=True)
-        self.advance_var = tk.BooleanVar(value=False)
+        try:
+            self.advance_var
+        except:
+            self.advance_var = tk.BooleanVar(value=False)
         self.advance_swiwch = ttk.Checkbutton(self.main_frame, text="حالت پیشرفته", style="Switch.TCheckbutton", variable=self.advance_var)
         self.advance_swiwch.pack(side='right', fill="none", expand=True, pady=10, ipadx=0)
         frame_section_button = tk.Frame(self.root)
@@ -1238,8 +1243,8 @@ class App():
             self.calc_var = tk.StringVar()
             entry_frame = tk.Frame(sets_calc_frame)
             entry_frame.pack(side="top", expand=True, fill="x")
-            calc_entry = ttk.Entry(entry_frame, font=("B Morvarid", 23), textvariable=self.calc_var)
-            calc_entry.pack(side="right", expand=True, fill="both", padx=10, pady=10, ipadx=10, ipady=10)
+            calc_entry = ttk.Entry(entry_frame, font=("B Morvarid", 18), textvariable=self.calc_var)
+            calc_entry.pack(side="right", expand=True, fill="both", padx=10, pady=10)
             calc_scrollbar = ttk.Scrollbar(entry_frame, orient="horizontal", command=calc_entry.xview)
             calc_entry.config(xscrollcommand=calc_scrollbar.set)
             calc_scrollbar.pack(side="bottom", fill="x")
@@ -1249,8 +1254,10 @@ class App():
             ruselt_label_part_1.pack(side="right", expand=True, fill="y")
             self.ruselt_label_part_2 = ttk.Label(ruselt_frame, text="...در انتظار دریافت عبارت", font=("B Morvarid", 20))
             self.ruselt_label_part_2.pack(side="left", expand=True, fill="y")
-            calc_btn = ttk.Button(entry_frame, text="محاسبه", command=lambda:self.calc_metod_more_set(sets_obj))
+            calc_btn = ttk.Button(entry_frame, text="محاسبه", command=lambda: self.calc_metod_more_set(sets_obj), style="CalcAdvanc.TButton")
+
             calc_btn.pack(side="left", expand=True, fill="both", padx=10, pady=10)
+            treeViwe_defalt.config(height=4)
         other_information_frame = ttk.Frame(tab_content_frame)
         other_information_frame.pack(side="top", fill="both", expand=True, padx=10, pady=10)
         other_information_frame.pack_forget()
@@ -1299,12 +1306,12 @@ class App():
         frame = self.tabs[selected_key]
         frame.pack(side="top",fill="both", expand=True)
         self.current_tab = frame
-    def check_entry(self,sets_section=False):
+    def check_entry(self, sets_section=False):
         self.set_finall = self.set.get().strip()
         if self.set_finall.count("{") != self.set_finall.count("}"):
             messagebox.showerror("ERROR", "تعداد آکولاد باز و بسته باید برابر باشد")
             return False
-        
+
         if not (self.set_finall.startswith("{") and self.set_finall.endswith("}")):
             messagebox.showerror("ERROR", "ورودی باید با { شروع و با } تمام شود")
             return False
@@ -1312,13 +1319,17 @@ class App():
             transformed = SetsAlgorithm.parse_set_string(SetsAlgorithm.fix_set_variables(self.set_finall))
             eval_set = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
         except Exception as e:
-            if self.set_finall=="{}":
-                messagebox.showerror("ERROR","در حال حاظر از مجموعه تهی پشتیبانی نمی شود منتظر اپدیت بعدی باشید")
+            if self.set_finall == "{}":
+                messagebox.showerror("ERROR", "در حال حاظر از مجموعه تهی پشتیبانی نمی شود منتظر اپدیت بعدی باشید")
             else:   
                 messagebox.showerror("ERROR", f"فرمت مجموعه وارد شده نادرست است:\n{e}")
             return False
         if not self.set_name.get() or self.set_name.get().isdigit():
             messagebox.showerror("ERROR", "نمیتوانید نام مجموعه را خالی بگذارید یا عدد وارد کنید")
+            return False
+        # اضافه کردن بررسی اینکه نام مجموعه تنها شامل حروف انگلیسی باشد
+        if not re.fullmatch(r"[A-Za-z]+", self.set_name.get().strip()):
+            messagebox.showerror("ERROR", "فقط می‌توانید از حروف انگلیسی برای نام مجموعه استفاده کنید")
             return False
         if self.set_name.get().islower():
             messagebox.showwarning("Warning", "حروف به صورت بزرگ تبدیل شدند")
