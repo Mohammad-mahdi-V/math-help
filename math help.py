@@ -2,7 +2,7 @@
 import time
 start_time = time.time()
 import threading
-from matplotlib.pyplot import show,figure
+import matplotlib.pyplot as plt
 from matplotlib_venn import venn2, venn3
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import venn
@@ -22,6 +22,141 @@ from google.generativeai.generative_models import GenerativeModel
 from google.generativeai.client import configure
 import re
 import socket
+import sympy as sp
+import numpy as np
+from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
+import numpy as np
+
+class LineAlgorithm:
+    def __init__(self):
+        self.x, self.y = sp.symbols('x y')
+    def parse_equation(self, equation):
+        equation = equation.replace('^', '**')
+        transformations = standard_transformations + (implicit_multiplication_application,)
+        try:
+            if "=" in equation:
+                left_str, right_str = equation.split("=")
+                left_expr = parse_expr(left_str, transformations=transformations)
+                right_expr = parse_expr(right_str, transformations=transformations)
+                expr = left_expr - right_expr
+            else:
+                expr = parse_expr(equation, transformations=transformations)
+
+            std_expr = sp.expand(expr)
+            entered_form = sp.pretty(std_expr) + " = 0"
+
+            solutions = sp.solve(expr, self.y)
+            if solutions:
+                if len(solutions) == 1:
+                    sol = solutions[0]
+                    m = sol.coeff(self.x)
+                    b = sol.subs(self.x, 0)
+                    if sp.simplify(sol - (m * self.x + b)) == 0:
+                        distance = abs(b) / sp.sqrt(m ** 2 + 1)
+                        distance = float(distance)
+                        computed_form = f"y = {float(m):.2f}x + {float(b):.2f}"
+                        info = (f"شیب = {float(m):.2f}، عرض = {float(b):.2f}، طول = {distance:.2f}\n"
+                                f"حالت استاندارد معادله وارد شده: {entered_form}\n"
+                                f"حالت استاندارد معادله: {computed_form}")
+                        return ("linear", sol, m, b, info)
+                    else:
+                        computed_form = f"y = {sp.pretty(sol)}"
+                        info = (f"معادله منحنی: {sp.pretty(sol)}\n"
+                                f"حالت استاندارد معادله وارد شده: {entered_form}\n"
+                                f"حالت استاندارد معادله: {computed_form}")
+                        return ("curve", sol, None, None, info)
+                else:
+                    info = "معادله دارای چند شاخه است:\n"
+                    for sol in solutions:
+                        sol_str = sp.pretty(sol)
+                        info += f"y = {sol_str}\n"
+                    info += f"حالت استاندارد معادله وارد شده: {entered_form}"
+                    return ("multiple", solutions, None, None, info)
+            else:
+                return ("none", None, None, None, "معادله قابل حل نیست.")
+        except Exception as e:
+            print("Error in parse_equation:", e)
+            return ("error", None, None, None, "خطا در تبدیل معادله.")
+
+    def plot_equation(self, equation):
+        eq_type, sol, m, b, info = self.parse_equation(equation)
+        if eq_type == "linear":
+            func = sp.lambdify(self.x, sol, 'numpy')
+            x_vals = np.linspace(-20, 20, 400)
+            y_vals = func(x_vals)
+            plt.figure(figsize=(6, 4))
+            plt.plot(x_vals, y_vals, label=f'y = {float(m):.2f}x + {float(b):.2f}')
+            plt.axhline(0, color='black', linewidth=0.5)
+            plt.axvline(0, color='black', linewidth=0.5)
+            plt.grid(True, linestyle='--', linewidth=0.5)
+            plt.title('نمودار خطی')
+            plt.xlabel('x')
+            plt.ylabel('y')
+            plt.legend()
+            plt.show()
+        elif eq_type == "curve":
+            func = sp.lambdify(self.x, sol, 'numpy')
+            x_vals = np.linspace(-20, 20, 400)
+            y_vals = func(x_vals)
+            plt.figure(figsize=(6, 4))
+            plt.plot(x_vals, y_vals, label=f'y = {sp.pretty(sol)}')
+            plt.axhline(0, color='black', linewidth=0.5)
+            plt.axvline(0, color='black', linewidth=0.5)
+            plt.grid(True, linestyle='--', linewidth=0.5)
+            plt.title('نمودار منحنی')
+            plt.xlabel('x')
+            plt.ylabel('y')
+            plt.legend()
+            plt.show()
+        elif eq_type == "multiple":
+            plt.figure(figsize=(6, 4))
+            for sol_item in sol:
+                sol_str = sp.pretty(sol_item)
+                try:
+                    func = sp.lambdify(self.x, sol_item, 'numpy')
+                    x_vals = np.linspace(-20, 20, 400)
+                    y_vals = func(x_vals)
+                    plt.plot(x_vals, y_vals, label=f'y = {sol_str}')
+                except Exception as e:
+                    print(e)
+            plt.axhline(0, color='black', linewidth=0.5)
+            plt.axvline(0, color='black', linewidth=0.5)
+            plt.grid(True, linestyle='--', linewidth=0.5)
+            plt.title('نمودار منحنی')
+            plt.xlabel('x')
+            plt.ylabel('y')
+            plt.legend()
+            plt.show()
+        return info
+
+    def calculate_from_points(self, point1, point2):
+        x1, y1 = point1
+        x2, y2 = point2
+        if x1 == x2:
+            raise ValueError("نقاط باید دارای مقادیر x متفاوت باشند.")
+        m = (y2 - y1) / (x2 - x1)
+        b = y1 - m * x1
+        return m, b
+
+    def plot_line_from_points(self, m, b):
+        distance = abs(b) / sp.sqrt(m ** 2 + 1)
+        distance = float(distance)
+        x_vals = np.linspace(-20, 20, 400)
+        y_vals = m * x_vals + b
+        plt.figure(figsize=(6, 4))
+        plt.plot(x_vals, y_vals, label=f'y = {m:.2f}x + {b:.2f}')
+        plt.axhline(0, color='black', linewidth=0.5)
+        plt.axvline(0, color='black', linewidth=0.5)
+        plt.grid(True, linestyle='--', linewidth=0.5)
+        plt.title('نمودار خطی')
+        plt.xlabel('x')
+        plt.ylabel('y')
+        plt.legend()
+        plt.show()
+        info = (f"شیب = {m:.2f}، عرض = {b:.2f}، طول = {distance:.2f}\n"
+                f"حالت استاندارد معادله: y = {m:.2f}x + {b:.2f}  (یا {m:.2f}x - y + {b:.2f} = 0)")
+        return info
+
 # -------------------------------------------
 # کلاس‌های مربوط به الگوریتم‌های مجموعه
 # -------------------------------------------
@@ -297,7 +432,6 @@ class SetsAlgorithm:
 
 
     def U_I_Ms_advance(self, text):
-        print(self.sets, 4)
 
         # جایگزینی علائم ∩ و ∪ با معادل‌های Python
         text = text.replace('∩', '&').replace('∪', '|')
@@ -308,10 +442,9 @@ class SetsAlgorithm:
         # استخراج قسمت‌هایی که خارج از `{}` هستند
         outside_braces = re.split(r'\{[^{}]*\}', text)  # فقط بخش‌های بیرون از `{}` را جدا می‌کند.
         found_vars = re.findall(r'\b[A-Za-z_][A-Za-z0-9_]*\b', " ".join(outside_braces))  # استخراج نام متغیرها
-
         # بررسی اینکه آیا متغیرهای **خارج از `{}`** در `self.set_of_sets` تعریف شده‌اند
         for var in found_vars:
-            if var not in self.set_of_sets:
+            if var.upper() not in self.set_of_sets:
                 messagebox.showerror("خطا", f"متغیر '{var}' تعریف نشده است!")
                 return "در انتظار دریافت عبارت..."  # برای جلوگیری از هنگ کردن، مقدار پیش‌فرض بازگردانی شود.
 
@@ -417,7 +550,7 @@ class SetsAlgorithm:
             return
 
 
-        show()
+        plt.show()
 
     def draw_venn_4_more(self):
         """
@@ -425,7 +558,7 @@ class SetsAlgorithm:
         این تابع نمودار را داخل parent_frame قرار می‌دهد.
         """
         # تنظیم اندازه شکل با ارتفاع کمتر
-        fig = figure(figsize=(10, 5))
+        fig = plt.figure(figsize=(10, 5))
         ax = fig.add_subplot(111)
 
         # آماده‌سازی داده‌های نمودار ون با تغییر نام به "مجموعه X"
@@ -436,7 +569,10 @@ class SetsAlgorithm:
                 name = name.replace("Set ", "مجموعه ")
             # تبدیل مقدار به set به صورت صریح
             venn_data[name] = SetsAlgorithm.safe_eval(self.sets[i])
-        
+        print(venn_data)
+        print(type(venn_data))
+        venn_data = {k: set(v) for k, v in venn_data.items()}
+
         # رسم نمودار ون روی محور مشخص (ax)
         # توجه: اگر تابع venn.venn از پارامتر ax پشتیبانی نکند،
         # ممکن است نیاز به تغییرات جزئی داشته باشید یا از یک کتابخانه‌ی متفاوت استفاده کنید.
@@ -633,6 +769,7 @@ class App():
         sttk.use_dark_theme()
         style.configure("TButton", font=("B Morvarid", 20), padding=10, foreground="white")
         style.configure("CalcAdvanc.TButton", font=("B Morvarid", 15))
+        style.configure("draw.TButton", font=("B Morvarid", 15))
         style.configure("Switch.TCheckbutton", font=("B Morvarid", 15), padding=0)
         style.configure("TNotebook.Tab", font=("B Morvarid", 15), padding=5, borderwidth=0, relief="flat", highlightthickness=0, anchor="center")
         style.configure("Treeview.Heading", font=("B Morvarid", 14, "bold"))
@@ -642,6 +779,7 @@ class App():
         style.configure("TRadiobutton", font=("B Morvarid", 20)) 
         sttk.use_light_theme()
         style.configure("CalcAdvanc.TButton", font=("B Morvarid", 15))
+        style.configure("draw.TButton", font=("B Morvarid", 15))
         style.configure("TButton", font=("B Morvarid", 20), padding=10, foreground="black")
         style.configure("Switch.TCheckbutton", font=("B Morvarid", 15), padding=0)
         style.configure("TNotebook.Tab", font=("B Morvarid", 15), padding=5, borderwidth=0, relief="flat", highlightthickness=0, anchor="center")
@@ -833,53 +971,7 @@ class App():
         one_set.pack(side="left", fill="x", expand=True, padx=10, pady=10)
         self.information_button.config(command=lambda: self.information("set_choice"))
         self.exit_button.config(text="صفحه قبل", command=self.main_page)
-    def enter_L_equation(self):
-        self.clear_screen()
-        self.frame_lins_info = ttk.Frame(self.root)
-        self.frame_lins_info.pack(side="top", expand=True, fill="both", padx=10, pady=10)
-        num=1
-        line_num=ttk.Label(self.frame_lins_info,text=f": اطلاعات خط {num} را وارد کنید",font=("B Morvarid",15))
-        line_num.pack(side="top",expand=True,padx=10,pady=10)
-        frame_lins_mode=ttk.Frame(self.frame_lins_info)
-        frame_lins_mode.pack(side="top",expand=True,fill="both",padx=10,pady=10)
-        self.line_mode = tk.StringVar(value="equation")
-        line_raido_mode_eq = ttk.Radiobutton(frame_lins_mode, text="معادله", variable=self.line_mode, value="equation", command=self.update_line_inputs)
-        line_raido_mode_pts = ttk.Radiobutton(frame_lins_mode, text="نقطه‌ای", variable=self.line_mode, value="points", command=self.update_line_inputs)
-        line_raido_mode_eq.pack(side="left",expand=True,padx=10,pady=10)
-        line_raido_mode_pts.pack(side="right",expand=True,padx=10,pady=10)
-        frame_lins_equation = ttk.Frame(self.frame_lins_info)
-        frame_lins_equation.pack(side="top", expand=True, fill="both", padx=10, pady=10)
-        self.lins_equation=tk.StringVar()
-        self.lins_equation_entry=ttk.Entry(frame_lins_equation,font=("B Morvarid",15),textvariable=self.lins_equation)
-        self.lins_equation_entry.pack(side="left",fill="both",expand=True,padx=10,pady=10)
-        self.label_lins_eq=ttk.Label(frame_lins_equation,font=("B Morvarid",15),text="معادله مورد نظر را وارد کنید")
-        self.label_lins_eq.pack(side="right",padx=10,pady=10)
-        btn_frame=ttk.Frame(self.frame_lins_info)
-        btn_frame.pack(side="bottom",fill="both",expand=True,padx=10,pady=10)
-        Prvious_btn=ttk.Button(btn_frame,text="خط قبلی")
-        Prvious_btn.pack(side="right",fill="x",expand=True,padx=10,pady=10)
-        next_btn=ttk.Button(btn_frame,text="ثبت اطلاعات و دریافت اطلاعات خط بعدی ")
-        next_btn.pack(side="right",fill="x",expand=True,padx=10,pady=10)
-        end_btn=ttk.Button(btn_frame,text="رسم خط")
-        end_btn.pack(side="left",fill="x",expand=True,padx=10,pady=10)
-        self.exit_button.config(text="صفحه قبل",command=self.main_page)
-    def update_line_inputs(self):
-        if self.line_mode.get()=="points":
-            self.frame_lins_pts=ttk.Frame(self.frame_lins_info)
-            self.frame_lins_pts.pack(side="top",expand=True,fill="both",padx=10,pady=10)
-            self.label_lins_eq.config(text="وارد کنید (x,y) نقطه اول را  به صورت ")
-            self.lins_pts=tk.StringVar()
-            self.lins_pts_entry=ttk.Entry(self.frame_lins_pts,font=("B Morvarid",15),textvariable=self.lins_pts)
-            self.lins_pts_entry.pack(side="left",fill="both",expand=True,padx=10,pady=10)
-            self.label_lins_pts=ttk.Label(self.frame_lins_pts,font=("B Morvarid",15),text="وارد کنید (x,y) نقطه دوم را  به صورت ")
-            self.label_lins_pts.pack(side="right",padx=10,pady=10)
-        else:
-            self.label_lins_eq.config(text="معادله مورد نظر را وارد کنید")
-            self.label_lins_pts.pack_forget()
-            self.lins_pts_entry.pack_forget()
-            self.frame_lins_pts.pack_forget()
     
-
     def set_section(self):
         self.clear_screen()
         self.advance_swiwch.config(state="normall")
@@ -905,7 +997,7 @@ class App():
         self.set_entry_name = ttk.Entry(freame_entery_name, font=("B Morvarid", 20), textvariable=self.set_name, 
                                           validate="key", validatecommand=(self.root.register(lambda text: len(text) <= 1), "%P"))
         self.set_entry_name.pack(side="top", fill="x", expand=True, padx=10, pady=10, ipadx=5, ipady=5)
-        next_button = ttk.Button(self.root, text="بعدی", command=self.check_entry)
+        next_button = ttk.Button(self.root, text="بعدی", command=self.check_entry_sets)
         next_button.pack(side="bottom", fill="x", expand=True, padx=20, pady=10)
         scroolbar_set_entery = ttk.Scrollbar(freame_entery_set_entry, orient="horizontal", command=self.set_entry.xview)
         self.set_entry.config(xscrollcommand=scroolbar_set_entery.set)
@@ -1012,9 +1104,9 @@ class App():
 
     def sets_section(self):
         self.clear_screen()
-        self.advance_swiwch.config(command=self.change_state)
-        self.frame_sets_info = ttk.Frame(self.root)
-        self.frame_sets_info.pack(side="left", expand=True, fill="both", padx=10, pady=10)
+        self.advance_swiwch.config(command=self.change_state,state="normall")
+        frame_sets_info = ttk.Frame(self.root)
+        frame_sets_info.pack(side="left", expand=True, fill="both", padx=10, pady=10)
         frame_treeViwe_sets=ttk.Frame(self.root)
         frame_treeViwe_sets.pack(side="right", expand=True, fill="both", padx=10, pady=10)
         self.treeViwe_sets= ttk.Treeview(frame_treeViwe_sets, columns=("number","members"))
@@ -1030,11 +1122,11 @@ class App():
         self.treeViwe_sets.pack(side="left", expand=True, fill="both", padx=10, pady=10)
         self.num=1
         self.sets_dict={}
-        self.sets_num=ttk.Label(self.frame_sets_info,text=f": اطلاعات مجموعه {self.num} را وارد کنید ",font=("B Morvarid",15))
+        self.sets_num=ttk.Label(frame_sets_info,text=f": اطلاعات مجموعه {self.num} را وارد کنید ",font=("B Morvarid",15))
         self.sets_num.pack(side="top",expand=True,padx=10,pady=10)
-        frame_set_member = ttk.Frame(self.frame_sets_info)
+        frame_set_member = ttk.Frame(frame_sets_info)
         frame_set_member.pack(side="top", expand=True, fill="both", padx=10, pady=10)
-        frame_set_name = ttk.Frame(self.frame_sets_info)
+        frame_set_name = ttk.Frame(frame_sets_info)
         frame_set_name.pack(side="top", expand=True, fill="both", padx=10, pady=10)
         frame_set_member_entry_package = ttk.Frame(frame_set_member)
         frame_set_member_entry_package.pack(side="left", fill="both", expand=True, padx=10, pady=10)
@@ -1052,7 +1144,7 @@ class App():
         self.set_name_entry.pack(side="left",fill="both",expand=True,padx=20,pady=10,ipadx=5, ipady=5)
         self.set_name_label=ttk.Label(frame_set_name,font=("B Morvarid",15),text="نام مجموعه را وارد کنید")
         self.set_name_label.pack(side="right",padx=20,pady=10)
-        btn_frame=ttk.Frame(self.frame_sets_info)
+        btn_frame=ttk.Frame(frame_sets_info)
         btn_frame.pack(side="bottom",fill="both",expand=True,padx=10,pady=10)
         self.next_btn=ttk.Button(btn_frame,text="ثبت اطلاعات و دریافت اطلاعات مجموعه بعدی ",command=self.next_set)
         self.next_btn.pack(side="right",fill="x",expand=True,padx=10,pady=10)
@@ -1065,7 +1157,7 @@ class App():
             if self.set_name.get().upper()==self.sets_dict[key]["نام مجموعه"]:
                 messagebox.showerror("نام تکراری","نمی توانید از نام تکراری برای مجموعه استفاده کنید")
                 return
-        if not self.check_entry(sets_section=True):
+        if not self.check_entry_sets(sets_section=True):
             return
         self.sets_dict[self.num]={"نام مجموعه":self.set_name.get().upper(),"اعضای مجموعه":self.set_finall}
         self.sets_displey()
@@ -1098,7 +1190,7 @@ class App():
             if self.set_name.get().upper()==self.sets_dict[key]["نام مجموعه"]:
                 messagebox.showerror("نام تکراری","نمی توانید از نام تکراری برای مجموعه استفاده کنید")
                 return
-        if not self.check_entry(sets_section=True):
+        if not self.check_entry_sets(sets_section=True):
             return
         transformed = SetsAlgorithm.parse_set_string(SetsAlgorithm.fix_set_variables(self.set_finall))
         evaluated = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
@@ -1229,7 +1321,7 @@ class App():
         scrollbar.pack(side="right", fill="y", pady=10)
         treeViwe_defalt.config(yscrollcommand=scrollbar.set)
         treeViwe_defalt.pack(side="left", fill="both", expand=True)
-        draw_venn_btn=ttk.Button(calculator_frame,text="رسم نمودار ون")
+        draw_venn_btn=ttk.Button(calculator_frame,text="رسم نمودار ون",style="draw.TButton")
         draw_venn_btn.pack(side="top",fill="both",padx=10,pady=10)
         if self.advance_swiwch and  len(set_of_sets) >= 4:
             draw_venn_btn.config(command=sets_obj.draw_venn_4_more)
@@ -1306,7 +1398,201 @@ class App():
         frame = self.tabs[selected_key]
         frame.pack(side="top",fill="both", expand=True)
         self.current_tab = frame
-    def check_entry(self, sets_section=False):
+        self.clear_screen()
+    def enter_L_equation(self):
+        self.clear_screen()
+        # فریم سمت چپ: ورود اطلاعات خط
+        frame_lines_info = ttk.Frame(self.root, padding=10)
+        frame_lines_info.pack(side="left", expand=True, fill="both", padx=10, pady=10)
+
+        # فریم سمت راست: نمایش Treeview خطوط
+        frame_treeview_lines = ttk.Frame(self.root, padding=10)
+        frame_treeview_lines.pack(side="right", expand=True, fill="both", padx=10, pady=10)
+
+        # ایجاد Treeview خطوط
+        self.treeViwe_lines = ttk.Treeview(frame_treeview_lines, columns=("number", "members"))
+        self.treeViwe_lines.heading("#0", text="نام خط")
+        self.treeViwe_lines.heading("number", text="شماره خط")
+        self.treeViwe_lines.heading("members", text="معادله خط")
+        self.treeViwe_lines.column("#0", width=150, anchor="center")
+        self.treeViwe_lines.column("number", width=150, anchor="center")
+        self.treeViwe_lines.column("members", width=250)
+        scrollbar_sub = ttk.Scrollbar(frame_treeview_lines, orient="vertical", command=self.treeViwe_lines.yview)
+        scrollbar_sub.pack(side="right", fill="y", pady=10)
+        self.treeViwe_lines.config(yscrollcommand=scrollbar_sub.set)
+        self.treeViwe_lines.pack(side="left", expand=True, fill="both", padx=10, pady=10)
+
+        self.num = 1
+        self.lines_dict = {}
+        self.lines_num = ttk.Label(frame_lines_info, text=f": اطلاعات خط {self.num} را وارد کنید ", font=("B Morvarid", 15))
+        self.lines_num.pack(side="top", expand=True, padx=10, pady=10)
+
+        # فریم رادیوباکس: انتخاب بین معادله یا نقاط خط
+        radio_frame = ttk.Frame(frame_lines_info)
+        radio_frame.pack(side="top", fill="x", expand=True, padx=10, pady=10)
+        self.equation_point_var = tk.BooleanVar(value=True)
+        radio_equation = ttk.Radiobutton(radio_frame, text="معادله خط", variable=self.equation_point_var,
+                                        value=True, command=self.change_frame_line)
+        radio_equation.pack(side="right", fill="x", expand=True, padx=10, pady=10)
+        radio_points = ttk.Radiobutton(radio_frame, text="نقاط خط", variable=self.equation_point_var,
+                                    value=False, command=self.change_frame_line)
+        radio_points.pack(side="left", fill="x", expand=True, padx=10, pady=10)
+
+        # ---------------------------
+        # بخش معادله خط (نمایش دائمی)
+        # ---------------------------
+        self.frame_lines_equation = ttk.Frame(frame_lines_info, padding=10)
+        self.frame_lines_equation.pack(side="top", expand=True, fill="x", padx=10, pady=10)
+        # لیبل و اینتری کنار هم با grid
+        equation_label = ttk.Label(self.frame_lines_equation, text="معادله خط را وارد کنید:", font=("B Morvarid", 15))
+        equation_label.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.line = tk.StringVar()
+        self.lines_equation_entry = ttk.Entry(self.frame_lines_equation, font=("B Morvarid", 20), textvariable=self.line)
+        self.lines_equation_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        self.frame_lines_equation.columnconfigure(1, weight=1)
+        scrollbar_eq = ttk.Scrollbar(self.frame_lines_equation, orient="horizontal", command=self.lines_equation_entry.xview)
+        scrollbar_eq.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        self.lines_equation_entry.config(xscrollcommand=scrollbar_eq.set)
+        # ---------------------------
+        # بخش نقاط خط
+        # ---------------------------
+        self.frame_lines_points = ttk.Frame(frame_lines_info, padding=10)
+        self.frame_lines_points.pack(side="top", expand=True, fill="x", padx=10, pady=10)
+
+        # --- نقطه اول ---
+        frame_one_point = ttk.Frame(self.frame_lines_points)
+        frame_one_point.pack(side="top", fill="x", padx=10, pady=10)
+
+        # نقطه اول - X
+        frame_one_point_x = ttk.Frame(frame_one_point)
+        frame_one_point_x.grid(row=0, column=0, padx=10, pady=5, sticky="ew")
+        frame_one_point_x.columnconfigure(1, weight=1)
+        self.point_one_x = tk.StringVar()
+        label_first_point_x = ttk.Label(frame_one_point_x, text="نقطه اول - X:", font=("B Morvarid", 15))
+        label_first_point_x.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.lines_first_point_x_entry = ttk.Entry(frame_one_point_x, font=("B Morvarid", 20), textvariable=self.point_one_x)
+        self.lines_first_point_x_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        scrollbar_first_x = ttk.Scrollbar(frame_one_point_x, orient="horizontal", command=self.lines_first_point_x_entry.xview)
+        scrollbar_first_x.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        self.lines_first_point_x_entry.config(xscrollcommand=scrollbar_first_x.set)
+
+        # نقطه اول - Y
+        frame_one_point_y = ttk.Frame(frame_one_point)
+        frame_one_point_y.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
+        frame_one_point_y.columnconfigure(1, weight=1)
+        self.point_one_y = tk.StringVar()
+        label_first_point_y = ttk.Label(frame_one_point_y, text="نقطه اول - Y:", font=("B Morvarid", 15))
+        label_first_point_y.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.lines_first_point_y_entry = ttk.Entry(frame_one_point_y, font=("B Morvarid", 20), textvariable=self.point_one_y)
+        self.lines_first_point_y_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        scrollbar_first_y = ttk.Scrollbar(frame_one_point_y, orient="horizontal", command=self.lines_first_point_y_entry.xview)
+        scrollbar_first_y.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        self.lines_first_point_y_entry.config(xscrollcommand=scrollbar_first_y.set)
+
+        # --- نقطه دوم ---
+        frame_two_point = ttk.Frame(self.frame_lines_points)
+        frame_two_point.pack(side="top", fill="x", padx=10, pady=10)
+
+        # نقطه دوم - X
+        frame_two_point_x = ttk.Frame(frame_two_point)
+        frame_two_point_x.grid(row=0, column=0, padx=10, pady=5, sticky="ew")
+        frame_two_point_x.columnconfigure(1, weight=1)
+        self.point_two_x = tk.StringVar()
+        label_second_point_x = ttk.Label(frame_two_point_x, text="نقطه دوم - X:", font=("B Morvarid", 15))
+        label_second_point_x.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.lines_second_point_x_entry = ttk.Entry(frame_two_point_x, font=("B Morvarid", 20), textvariable=self.point_two_x)
+        self.lines_second_point_x_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        scrollbar_second_x = ttk.Scrollbar(frame_two_point_x, orient="horizontal", command=self.lines_second_point_x_entry.xview)
+        scrollbar_second_x.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        self.lines_second_point_x_entry.config(xscrollcommand=scrollbar_second_x.set)
+
+        # نقطه دوم - Y
+        frame_two_point_y = ttk.Frame(frame_two_point)
+        frame_two_point_y.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
+        frame_two_point_y.columnconfigure(1, weight=1)
+        self.point_two_y = tk.StringVar()
+        label_second_point_y = ttk.Label(frame_two_point_y, text="نقطه دوم - Y:", font=("B Morvarid", 15))
+        label_second_point_y.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.lines_second_point_y_entry = ttk.Entry(frame_two_point_y, font=("B Morvarid", 20), textvariable=self.point_two_y)
+        self.lines_second_point_y_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        scrollbar_second_y = ttk.Scrollbar(frame_two_point_y, orient="horizontal", command=self.lines_second_point_y_entry.xview)
+        scrollbar_second_y.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        self.lines_second_point_y_entry.config(xscrollcommand=scrollbar_second_y.set)
+        self.frame_lines_points.pack_forget()
+        # ---------------------------
+        # ورود نام خط
+        # ---------------------------
+        frame_lines_name = ttk.Frame(frame_lines_info, padding=10)
+        frame_lines_name.pack(side="top", expand=True, fill="x", padx=10, pady=10)
+        self.line_name = tk.StringVar()
+        label_line_name = ttk.Label(frame_lines_name, text="نام خط را وارد کنید:", font=("B Morvarid", 15))
+        label_line_name.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.lines_name_entry = ttk.Entry(frame_lines_name, font=("B Morvarid", 20), textvariable=self.line_name,
+                                        validate="key", validatecommand=(self.root.register(lambda text: len(text) <= 1), "%P"))
+        self.lines_name_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        frame_lines_name.columnconfigure(1, weight=1)
+
+        # ---------------------------
+        # دکمه‌ها
+        # ---------------------------
+        btn_frame = ttk.Frame(frame_lines_info, padding=10)
+        btn_frame.pack(side="bottom", fill="x", expand=True, padx=10, pady=10)
+        self.next_btn = ttk.Button(btn_frame, text="ثبت اطلاعات و دریافت اطلاعات خط بعدی", command=self.next_lines)
+        self.next_btn.pack(side="right", fill="x", expand=True, padx=10, pady=10)
+        self.end_btn = ttk.Button(btn_frame, text="ثبت و اتمام", command=self.end_lines, state="disabled")
+        self.end_btn.pack(side="left", fill="x", expand=True, padx=10, pady=10)
+        self.exit_button.config(text="صفحه قبل", command=self.main_page)
+
+    def change_frame_line(self):
+        if self.equation_point_var.get():
+            self.frame_lines_equation.pack()
+            self.frame_lines_points.pack_forget()
+        else:
+            self.frame_lines_points.pack()
+            self.frame_lines_equation.pack_forget()
+
+    def end_lines(self):
+        if not self.check_entry_lines():
+            return
+        for key in self.lines_dict.keys():
+            if self.line_name.get().upper()==self.lines_dict[key]["نام مجموعه"]:
+                messagebox.showerror("نام تکراری","نمی توانید از نام تکراری برای مجموعه استفاده کنید")
+                return
+        self.lines_dict[self.num]={"نام مجموعه":self.lines_name.get().upper(),"اعضای مجموعه":self.lines_finall}
+        self.lines_displey()
+    def prvious_lines(self):
+        if not messagebox.askyesno("حذف خط فعلی","با ای کار خط فعلی شما حذف خواهد شد"):
+            return
+        self.lines_dict.pop(self.num-1)
+        self.treeViwe_lines.delete(self.treeViwe_lines.get_children()[-1])
+        self.num-=1
+        self.lines_num.config(text=f": اطلاعات مجموعه {self.num} را وارد کنید ")
+        self.line_name.set("")
+        self.line.set("{")
+        if self.num == 1:
+            self.exit_button.config(text="صفحه قبل", command=self.main_page_sets)
+
+    def next_lines(self):
+        if not self.check_entry_lines():
+            return
+        for key in self.lines_dict.keys():
+            if self.lines_name.get().upper()==self.lines_dict[key]["نام خط"]:
+                messagebox.showerror("نام تکراری","نمی توانید از نام تکراری برای خط استفاده کنید")
+                return
+        self.lines_dict[self.num] = {"نام خط": self.lines_name.get().upper(), "معادله خط": self.lines_finall}
+        self.treeViwe_lines.insert("", "end", text=self.set_name.get(), values=(self.num, SetsAlgorithm.set_to_str(_obj)))
+        self.line_name.set("")
+        self.line.set("{")
+        self.num+=1
+        self.lines_num.config(text=f": اطلاعات مجموعه {self.num} را وارد کنید ")
+        self.end_btn.config(state="normall")
+        self.exit_button.config(text="خط قبل",command=lambda:self.prvious_lines())
+        if self.num==10:
+            self.next_btn.config(state="disabled")
+            messagebox.showinfo("یک عدد تا اتمام ظرفیت","نمی توانید بیش از 10 عدد خط وارد کنید ")
+    def check_entry_lines(self):
+        pass
+    def check_entry_sets(self, sets_section=False):
         self.set_finall = self.set.get().strip()
         if self.set_finall.count("{") != self.set_finall.count("}"):
             messagebox.showerror("ERROR", "تعداد آکولاد باز و بسته باید برابر باشد")
