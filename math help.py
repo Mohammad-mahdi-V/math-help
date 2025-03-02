@@ -1,4 +1,3 @@
-
 import time
 start_time = time.time()
 import threading
@@ -23,9 +22,145 @@ from google.generativeai.client import configure
 import re
 import socket
 import sympy as sp
-import numpy as np
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
 import numpy as np
+import requests
+
+CURRENT_VERSION = "1.0.0"  
+
+def download_update(download_url, save_path, progress_callback):
+    try:
+        response = requests.get(download_url, stream=True)
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded = 0
+        with open(save_path, 'wb') as f:
+            for chunk in response.iter_content(1024):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    percentage = downloaded / total_size * 100
+                    if progress_callback:
+                        progress_callback(percentage)
+        return True
+    except Exception as e:
+        messagebox.showerror("خطا در دانلود", f"خطا در دانلود آپدیت:\n{e}")
+        return False
+
+def perform_update(current_file, tmp_file):
+    """
+    این تابع یک اسکریپت updater ایجاد می‌کند که پس از بسته شدن برنامه،
+    فایل فعلی را حذف کرده و فایل دانلود شده را جایگزین می‌کند و برنامه جدید را اجرا می‌کند.
+    """
+    updater_script = f"""import time, os, sys
+time.sleep(2)  # صبر تا بسته شدن برنامه اصلی
+try:
+    os.remove(r"{current_file}")
+except Exception:
+    pass
+os.rename(r"{tmp_file}", r"{current_file}")
+try:
+    if sys.platform.startswith("win"):
+        os.startfile(r"{current_file}")
+    else:
+        import subprocess
+        subprocess.Popen(["python3", r"{current_file}"])
+except Exception:
+    pass
+"""
+    updater_path = os.path.join(os.path.dirname(current_file), "updater.py")
+    try:
+        with open(updater_path, "w", encoding="utf-8") as f:
+            f.write(updater_script)
+    except Exception as e:
+        messagebox.showerror("خطا", f"خطا در نوشتن فایل آپدیت:\n{e}")
+        return
+
+    try:
+        if sys.platform.startswith("win"):
+            subprocess.Popen(["python", updater_path], creationflags=subprocess.CREATE_NO_WINDOW)
+        else:
+            subprocess.Popen(["python3", updater_path])
+    except Exception as e:
+        messagebox.showerror("خطا", f"خطا در اجرای آپدیت:\n{e}")
+
+def check_for_updates(root):
+    api_url = "https://api.github.com/repos/Mohammad-mahdi-V/math-help/releases"
+    try:
+        response = requests.get(api_url)
+        if response.status_code != 200:
+            messagebox.showerror("خطا", f"خطا در بررسی آپدیت، کد وضعیت: {response.status_code}")
+            return
+        releases = response.json()
+        # فیلتر کردن ریلیزهای stable (غیر pre-release و غیر draft)
+        stable_releases = [r for r in releases if not r.get("prerelease", False) and not r.get("draft", False)]
+        if not stable_releases:
+            messagebox.showinfo("اطلاع", "هیچ ریلیز منتشر شده‌ای یافت نشد.")
+            return
+        latest_release = stable_releases[0]
+        latest_version = latest_release.get("tag_name", "0")
+        if latest_version != CURRENT_VERSION:
+            if messagebox.askyesno("به‌روزرسانی موجود", f"نسخه جدید ({latest_version}) موجود است.\nآیا مایل به به‌روزرسانی هستید؟"):
+                assets = latest_release.get("assets", [])
+                if assets:
+                    download_url = assets[0].get("browser_download_url", "")
+                    if download_url:
+                        current_file = os.path.abspath(sys.argv[0])
+                        tmp_file = current_file + ".new"
+                        show_download_progress(root, download_url, tmp_file, current_file)
+                    else:
+                        messagebox.showerror("خطا", "لینک دانلود آپدیت پیدا نشد.")
+                else:
+                    messagebox.showerror("خطا", "هیچ فایل آپدیتی در ریلیز یافت نشد.")
+    except Exception as e:
+        messagebox.showerror("خطا در اتصال", f"خطا در اتصال به GitHub:\n{e}")
+
+def show_download_progress(root, download_url, tmp_file, current_file):
+    # ایجاد پنجره پیشرفت دانلود در Tkinter
+    progress_win = tk.Toplevel(root)
+    progress_win.title("دانلود آپدیت")
+    progress_win.resizable(False, False)
+    tk.Label(progress_win, text="در حال دانلود آپدیت...").pack(padx=10, pady=10)
+    progress_var = tk.DoubleVar()
+    progress_bar = ttk.Progressbar(progress_win, variable=progress_var, maximum=100, length=300)
+    progress_bar.pack(padx=10, pady=10)
+    percent_label = tk.Label(progress_win, text="0.00%")
+    percent_label.pack(padx=10, pady=10)
+
+    def progress_callback(percentage):
+        # به‌روزرسانی progressbar و لیبل درصد از طریق root.after برای ایمن بودن از نظر ترد
+        def update_ui():
+            progress_var.set(percentage)
+            percent_label.config(text=f"{percentage:.2f}%")
+        root.after(0, update_ui)
+
+    def download_thread():
+        success = download_update(download_url, tmp_file, progress_callback)
+        if success:
+            root.after(0, lambda: on_download_complete(progress_win, current_file, tmp_file))
+    
+    threading.Thread(target=download_thread, daemon=True).start()
+
+def on_download_complete(progress_win, current_file, tmp_file):
+    progress_win.destroy()
+    messagebox.showinfo("به‌روزرسانی", "آپدیت دانلود شد. برنامه بسته می‌شود تا آپدیت اعمال شود.")
+    perform_update(current_file, tmp_file)
+    sys.exit(0)
+
+# ایجاد پنجره اصلی Tkinter و مخفی کردن آن برای بررسی آپدیت
+root = tk.Tk()
+root.withdraw()
+
+check_for_updates(root)
+
+# نمایش پنجره اصلی بعد از بررسی آپدیت (در صورتی که آپدیت انجام نشده باشد)
+root.deiconify()
+root.title("Math Help")
+label = tk.Label(root, text="برنامه Math Help در حال اجرا است.")
+label.pack(padx=20, pady=20)
+root.mainloop()
+
+
+
 
 class LineAlgorithm:
     def __init__(self):
