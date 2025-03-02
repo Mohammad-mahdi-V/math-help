@@ -1402,7 +1402,7 @@ class App():
     def enter_L_equation(self):
         self.clear_screen()
         # فریم سمت چپ: ورود اطلاعات خط
-        frame_lines_info = ttk.Frame(self.root, padding=10)
+        frame_lines_info = ttk.Frame(self.root)
         frame_lines_info.pack(side="left", expand=True, fill="both", padx=10, pady=10)
 
         # فریم سمت راست: نمایش Treeview خطوط
@@ -1427,113 +1427,142 @@ class App():
         self.lines_num = ttk.Label(frame_lines_info, text=f": اطلاعات خط {self.num} را وارد کنید ", font=("B Morvarid", 15))
         self.lines_num.pack(side="top", expand=True, padx=10, pady=10)
 
-        # فریم رادیوباکس: انتخاب بین معادله یا نقاط خط
+        # رادیوباکس‌ها
         radio_frame = ttk.Frame(frame_lines_info)
         radio_frame.pack(side="top", fill="x", expand=True, padx=10, pady=10)
         self.equation_point_var = tk.BooleanVar(value=True)
         radio_equation = ttk.Radiobutton(radio_frame, text="معادله خط", variable=self.equation_point_var,
-                                        value=True, command=self.change_frame_line)
-        radio_equation.pack(side="right", fill="x", expand=True, padx=10, pady=10)
+                                         value=True, command=self.change_frame_line)
+        radio_equation.pack(side="right", expand=True, padx=10, pady=10)
         radio_points = ttk.Radiobutton(radio_frame, text="نقاط خط", variable=self.equation_point_var,
-                                    value=False, command=self.change_frame_line)
-        radio_points.pack(side="left", fill="x", expand=True, padx=10, pady=10)
+                                       value=False, command=self.change_frame_line)
+        radio_points.pack(side="left", expand=True, padx=10, pady=10)
+
+        # ورود نام خط (اینتری در ستون 0، لیبل در ستون 1)
+        frame_lines_name = ttk.Frame(frame_lines_info, padding=10)
+        frame_lines_name.pack(side="top", expand=True, fill="x", padx=10, pady=10)
+        self.line_name = tk.StringVar()
+        self.lines_name_entry = ttk.Entry(frame_lines_name, font=("B Morvarid", 20),
+                                          textvariable=self.line_name,
+                                          validate="key",
+                                          validatecommand=(self.root.register(lambda text: len(text) <= 1), "%P"))
+        self.lines_name_entry.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        label_line_name = ttk.Label(frame_lines_name, text="نام خط را وارد کنید:", font=("B Morvarid", 15))
+        label_line_name.grid(row=0, column=1, padx=5, pady=5, sticky="e")
+        frame_lines_name.columnconfigure(0, weight=1)
 
         # ---------------------------
-        # بخش معادله خط (نمایش دائمی)
+        # بخش معادله خط (اینتری در ستون 0، لیبل در ستون 1)
         # ---------------------------
         self.frame_lines_equation = ttk.Frame(frame_lines_info, padding=10)
         self.frame_lines_equation.pack(side="top", expand=True, fill="x", padx=10, pady=10)
-        # لیبل و اینتری کنار هم با grid
-        equation_label = ttk.Label(self.frame_lines_equation, text="معادله خط را وارد کنید:", font=("B Morvarid", 15))
-        equation_label.grid(row=0, column=0, padx=5, pady=5, sticky="w")
         self.line = tk.StringVar()
-        self.lines_equation_entry = ttk.Entry(self.frame_lines_equation, font=("B Morvarid", 20), textvariable=self.line)
-        self.lines_equation_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        self.frame_lines_equation.columnconfigure(1, weight=1)
-        scrollbar_eq = ttk.Scrollbar(self.frame_lines_equation, orient="horizontal", command=self.lines_equation_entry.xview)
-        scrollbar_eq.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        self.lines_equation_entry = ttk.Entry(self.frame_lines_equation, font=("B Morvarid", 20),
+                                              textvariable=self.line)
+        self.lines_equation_entry.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        equation_label = ttk.Label(self.frame_lines_equation, text="معادله خط را وارد کنید:", font=("B Morvarid", 15))
+        equation_label.grid(row=0, column=1, padx=5, pady=5, sticky="e")
+        self.frame_lines_equation.columnconfigure(0, weight=1)
+        scrollbar_eq = ttk.Scrollbar(self.frame_lines_equation, orient="horizontal",
+                                      command=self.lines_equation_entry.xview)
+        scrollbar_eq.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
         self.lines_equation_entry.config(xscrollcommand=scrollbar_eq.set)
-        # ---------------------------
-        # بخش نقاط خط
-        # ---------------------------
-        self.frame_lines_points = ttk.Frame(frame_lines_info, padding=10)
-        self.frame_lines_points.pack(side="top", expand=True, fill="x", padx=10, pady=10)
 
+        # ---------------------------
+        # بخش نقاط خط (اینتری‌ها در ستون 0، لیبل‌ها در ستون 1)
+        # ---------------------------
+        self.frame_lines_points = ttk.Frame(frame_lines_info)
+        self.frame_lines_points.pack(side="top", expand=True, fill="x", pady=10)
+        canvas = tk.Canvas(self.frame_lines_points,height=100,highlightthickness=0)
+        scrollbar = ttk.Scrollbar(self.frame_lines_points, orient="vertical", command=canvas.yview)
+        scrolled_frame = ttk.Frame(canvas)
+
+        scrolled_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
+
+        canvas.create_window((0, 0), window=scrolled_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.update_idletasks()  # اطمینان از اینکه کانواس بعد از افزودن محتوا اندازه‌اش به روز می‌شود
+        canvas.config(width=scrolled_frame.winfo_width()) 
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
         # --- نقطه اول ---
-        frame_one_point = ttk.Frame(self.frame_lines_points)
+        frame_one_point = ttk.Frame(scrolled_frame)
         frame_one_point.pack(side="top", fill="x", padx=10, pady=10)
 
         # نقطه اول - X
         frame_one_point_x = ttk.Frame(frame_one_point)
         frame_one_point_x.grid(row=0, column=0, padx=10, pady=5, sticky="ew")
-        frame_one_point_x.columnconfigure(1, weight=1)
+        frame_one_point_x.columnconfigure(0, weight=1)
         self.point_one_x = tk.StringVar()
-        label_first_point_x = ttk.Label(frame_one_point_x, text="نقطه اول - X:", font=("B Morvarid", 15))
-        label_first_point_x.grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        self.lines_first_point_x_entry = ttk.Entry(frame_one_point_x, font=("B Morvarid", 20), textvariable=self.point_one_x)
-        self.lines_first_point_x_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        scrollbar_first_x = ttk.Scrollbar(frame_one_point_x, orient="horizontal", command=self.lines_first_point_x_entry.xview)
-        scrollbar_first_x.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        self.lines_first_point_x_entry = ttk.Entry(frame_one_point_x, font=("B Morvarid", 20),
+                                                    textvariable=self.point_one_x,width=12)
+        self.lines_first_point_x_entry.grid(row=0, column=0, sticky="ew",padx=5, pady=5)
+        label_first_point_x = ttk.Label(frame_one_point_x, text=": نقطه اول - X", font=("B Morvarid", 15))
+        label_first_point_x.grid(row=0, column=1, sticky="e",padx=5, pady=5)
+        scrollbar_first_x = ttk.Scrollbar(frame_one_point_x, orient="horizontal",
+                                          command=self.lines_first_point_x_entry.xview)
+        scrollbar_first_x.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
         self.lines_first_point_x_entry.config(xscrollcommand=scrollbar_first_x.set)
 
         # نقطه اول - Y
         frame_one_point_y = ttk.Frame(frame_one_point)
         frame_one_point_y.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
-        frame_one_point_y.columnconfigure(1, weight=1)
+        frame_one_point_y.columnconfigure(0, weight=1)
         self.point_one_y = tk.StringVar()
-        label_first_point_y = ttk.Label(frame_one_point_y, text="نقطه اول - Y:", font=("B Morvarid", 15))
-        label_first_point_y.grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        self.lines_first_point_y_entry = ttk.Entry(frame_one_point_y, font=("B Morvarid", 20), textvariable=self.point_one_y)
-        self.lines_first_point_y_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        scrollbar_first_y = ttk.Scrollbar(frame_one_point_y, orient="horizontal", command=self.lines_first_point_y_entry.xview)
-        scrollbar_first_y.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        self.lines_first_point_y_entry = ttk.Entry(frame_one_point_y, font=("B Morvarid", 20),
+                                                    textvariable=self.point_one_y,width=12)
+        self.lines_first_point_y_entry.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        label_first_point_y = ttk.Label(frame_one_point_y, text=": نقطه اول - Y", font=("B Morvarid", 15))
+        label_first_point_y.grid(row=0, column=1, padx=5, pady=5, sticky="e")
+        scrollbar_first_y = ttk.Scrollbar(frame_one_point_y, orient="horizontal",
+                                          command=self.lines_first_point_y_entry.xview)
+        scrollbar_first_y.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
         self.lines_first_point_y_entry.config(xscrollcommand=scrollbar_first_y.set)
 
         # --- نقطه دوم ---
-        frame_two_point = ttk.Frame(self.frame_lines_points)
+        frame_two_point = ttk.Frame(scrolled_frame)
         frame_two_point.pack(side="top", fill="x", padx=10, pady=10)
 
         # نقطه دوم - X
         frame_two_point_x = ttk.Frame(frame_two_point)
         frame_two_point_x.grid(row=0, column=0, padx=10, pady=5, sticky="ew")
-        frame_two_point_x.columnconfigure(1, weight=1)
+        frame_two_point_x.columnconfigure(0, weight=1)
         self.point_two_x = tk.StringVar()
-        label_second_point_x = ttk.Label(frame_two_point_x, text="نقطه دوم - X:", font=("B Morvarid", 15))
-        label_second_point_x.grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        self.lines_second_point_x_entry = ttk.Entry(frame_two_point_x, font=("B Morvarid", 20), textvariable=self.point_two_x)
-        self.lines_second_point_x_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        scrollbar_second_x = ttk.Scrollbar(frame_two_point_x, orient="horizontal", command=self.lines_second_point_x_entry.xview)
-        scrollbar_second_x.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        self.lines_second_point_x_entry = ttk.Entry(frame_two_point_x, font=("B Morvarid", 20),
+                                                     textvariable=self.point_two_x,width=12)
+        self.lines_second_point_x_entry.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        label_second_point_x = ttk.Label(frame_two_point_x, text=": نقطه دوم - X", font=("B Morvarid", 15))
+        label_second_point_x.grid(row=0, column=1, padx=5, pady=5, sticky="e")
+        scrollbar_second_x = ttk.Scrollbar(frame_two_point_x, orient="horizontal",
+                                           command=self.lines_second_point_x_entry.xview)
+        scrollbar_second_x.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
         self.lines_second_point_x_entry.config(xscrollcommand=scrollbar_second_x.set)
 
         # نقطه دوم - Y
         frame_two_point_y = ttk.Frame(frame_two_point)
         frame_two_point_y.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
-        frame_two_point_y.columnconfigure(1, weight=1)
+        frame_two_point_y.columnconfigure(0, weight=1)
         self.point_two_y = tk.StringVar()
-        label_second_point_y = ttk.Label(frame_two_point_y, text="نقطه دوم - Y:", font=("B Morvarid", 15))
-        label_second_point_y.grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        self.lines_second_point_y_entry = ttk.Entry(frame_two_point_y, font=("B Morvarid", 20), textvariable=self.point_two_y)
-        self.lines_second_point_y_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        scrollbar_second_y = ttk.Scrollbar(frame_two_point_y, orient="horizontal", command=self.lines_second_point_y_entry.xview)
-        scrollbar_second_y.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        self.lines_second_point_y_entry = ttk.Entry(frame_two_point_y, font=("B Morvarid", 20),
+                                                     textvariable=self.point_two_y,width=12)
+        self.lines_second_point_y_entry.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        label_second_point_y = ttk.Label(frame_two_point_y, text=": نقطه دوم - Y", font=("B Morvarid", 15))
+        label_second_point_y.grid(row=0, column=1, padx=5, pady=5, sticky="e")
+        scrollbar_second_y = ttk.Scrollbar(frame_two_point_y, orient="horizontal",
+                                           command=self.lines_second_point_y_entry.xview)
+        scrollbar_second_y.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
         self.lines_second_point_y_entry.config(xscrollcommand=scrollbar_second_y.set)
+
+        # در ابتدا بخش نقاط را پنهان می‌کنیم
         self.frame_lines_points.pack_forget()
-        # ---------------------------
-        # ورود نام خط
-        # ---------------------------
-        frame_lines_name = ttk.Frame(frame_lines_info, padding=10)
-        frame_lines_name.pack(side="top", expand=True, fill="x", padx=10, pady=10)
-        self.line_name = tk.StringVar()
-        label_line_name = ttk.Label(frame_lines_name, text="نام خط را وارد کنید:", font=("B Morvarid", 15))
-        label_line_name.grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        self.lines_name_entry = ttk.Entry(frame_lines_name, font=("B Morvarid", 20), textvariable=self.line_name,
-                                        validate="key", validatecommand=(self.root.register(lambda text: len(text) <= 1), "%P"))
-        self.lines_name_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        frame_lines_name.columnconfigure(1, weight=1)
 
         # ---------------------------
-        # دکمه‌ها
+        # بخش دکمه‌ها
         # ---------------------------
         btn_frame = ttk.Frame(frame_lines_info, padding=10)
         btn_frame.pack(side="bottom", fill="x", expand=True, padx=10, pady=10)
@@ -1541,14 +1570,13 @@ class App():
         self.next_btn.pack(side="right", fill="x", expand=True, padx=10, pady=10)
         self.end_btn = ttk.Button(btn_frame, text="ثبت و اتمام", command=self.end_lines, state="disabled")
         self.end_btn.pack(side="left", fill="x", expand=True, padx=10, pady=10)
-        self.exit_button.config(text="صفحه قبل", command=self.main_page)
 
     def change_frame_line(self):
         if self.equation_point_var.get():
-            self.frame_lines_equation.pack()
+            self.frame_lines_equation.pack(fill="x",expand=True,padx=10,pady=10)
             self.frame_lines_points.pack_forget()
         else:
-            self.frame_lines_points.pack()
+            self.frame_lines_points.pack(fill="x",expand=True,padx=10,pady=10)
             self.frame_lines_equation.pack_forget()
 
     def end_lines(self):
