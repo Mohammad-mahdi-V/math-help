@@ -24,8 +24,8 @@ import socket
 import sympy as sp
 import numpy as np
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
-import numpy as np
 import requests
+import webbrowser
 
 
 
@@ -853,6 +853,21 @@ class App():
         except:
             pass
     def main_page(self):
+        def open_readme(page):
+            # باز کردن اطلاعات در برنامه
+            self.information(page)
+
+            # باز کردن فایل readme.html در مرورگر
+            readme_path = os.path.abspath("readme.html")  # مسیر مطلق فایل
+            webbrowser.open(f"readme.html")
+
+        def open_about_us(page):
+            # باز کردن اطلاعات در برنامه
+            self.information(page)
+
+            # باز کردن فایل readme.html در مرورگر
+            readme_path = os.path.abspath("about-us.html")  # مسیر مطلق فایل
+            webbrowser.open(f"about-us.html")
         if not hasattr(self, 'main_frame'):
             self.main_frame = ttk.Frame(self.root)
         if not hasattr(self, 'frame_footer'):
@@ -883,9 +898,9 @@ class App():
         enter_ai_button.grid(column=0, row=1, padx=10, pady=10, sticky="ew", columnspan=2)
         self.exit_button = ttk.Button(self.frame_footer, text="خروج", command=self.root.destroy)
         self.exit_button.pack(side="right", fill="x", expand=True, padx=10, pady=10)
-        self.about_button = ttk.Button(self.frame_footer, text=" درباره ما", command=self.about)
+        self.about_button = ttk.Button(self.frame_footer, text=" درباره ما", command=lambda: open_about_us("home_page"))
         self.about_button.pack(side="right", fill="x", expand=True, padx=10, pady=10)
-        self.information_button = ttk.Button(self.frame_footer, text="نحو کار در این بخش", command=lambda: self.information("home_page"))
+        self.information_button = ttk.Button(self.frame_footer,text="نحوه کار در این بخش",command=lambda: open_readme("home_page"))
         self.information_button.pack(side="right", fill="x", expand=True, padx=10, pady=10)
     def enter_ai(self):
         if DNS_manager.check_internet() == False:
