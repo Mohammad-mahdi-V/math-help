@@ -8,6 +8,7 @@ from tkinter import ttk
 import matplotlib.pyplot as plt
 import numpy as np
 import string
+
 class LineAlgorithm:
     def __init__(self):
         self.x, self.y = sp.symbols('x y')
@@ -175,6 +176,30 @@ entry_eq.pack(pady=5)
 
 
 def register_line_from_equation():
+    line_name = entry_line_name.get().strip()
+    if len(line_name) != 1 or line_name not in string.ascii_letters:
+        messagebox.showerror("خطا", "نام خط باید تنها یک حرف انگلیسی باشد (مثلاً A).")
+        return
+    if not line_name.isupper():
+        messagebox.showwarning("توجه", "نام خط به حروف بزرگ تبدیل شد.")
+        line_name = line_name.upper()
+    for line in registered_lines:
+        if line["name"] == line_name:
+            messagebox.showerror("خطا", "نام خط تکراری است.")
+            return
+    eq = entry_eq.get().strip()
+    if not eq:
+        messagebox.showerror("خطا", "لطفاً معادله را وارد کنید.")
+        return
+    result = calculator.parse_equation(eq)
+    eq_type, sol, m, b, info = result
+    if eq_type != "linear":
+        messagebox.showerror("خطا", "فقط معادلات خطی قابل ثبت هستند.")
+        return
+    registered_lines.append({"name": line_name, "m": float(m), "b": float(b), "info": info})
+    update_info_label()
+    entry_line_name.delete(0, tk.END)
+    entry_eq.delete(0, tk.END)
 
 
 register_eq_button = ttk.Button(root, text="ثبت خط از معادله", command=register_line_from_equation)

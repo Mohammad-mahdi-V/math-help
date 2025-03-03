@@ -26,6 +26,15 @@ import sympy as sp
 import numpy as np
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
 import numpy as np
+import requests
+from PIL import Image, ImageTk
+
+
+
+import sympy as sp
+import numpy as np
+from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
+import numpy as np
 
 class LineAlgorithm:
     def __init__(self):
@@ -156,7 +165,6 @@ class LineAlgorithm:
         info = (f"شیب = {m:.2f}، عرض = {b:.2f}، طول = {distance:.2f}\n"
                 f"حالت استاندارد معادله: y = {m:.2f}x + {b:.2f}  (یا {m:.2f}x - y + {b:.2f} = 0)")
         return info
-
 # -------------------------------------------
 # کلاس‌های مربوط به الگوریتم‌های مجموعه
 # -------------------------------------------
@@ -648,26 +656,28 @@ class DNS_manager():
                 socket.create_connection(("8.8.8.8", 53), timeout=1)
                 return True
             except OSError:
-                messagebox.showerror(title="به اینترنت متصل نیستید", message="برای چت با هوش مصنوعی به اینترنت پایدار متصل شوید.")
+                messagebox.showerror(title="به اینترنت متصل نیستید", message="برای چت با هوش مصنوعی و اپدیت به اینترنت پایدار متصل شوید.")
                 return False
         
         threading.Thread(target=_check, daemon=True).start()
 
-    @staticmethod
     def set_dns():
         """ تنظیم DNS بدون باز شدن ترمینال. """
-    subprocess.run(['netsh', 'interface', 'ip', 'set', 'dns', 'name="Wi-Fi"', 'static', '78.157.42.101'], creationflags=subprocess.CREATE_NO_WINDOW)
-    subprocess.run(['netsh', 'interface', 'ip', 'add', 'dns', 'name="Wi-Fi"',  '78.157.42.100', 'index=2'], creationflags=subprocess.CREATE_NO_WINDOW)
-    subprocess.run(['netsh', 'interface', 'ip', 'set', 'dns', 'name="Ethernet"', 'static', '78.157.42.101'], creationflags=subprocess.CREATE_NO_WINDOW)
-    subprocess.run(['netsh', 'interface', 'ip', 'add', 'dns', 'name="Ethernet"', '78.157.42.100', 'index=2'], creationflags=subprocess.CREATE_NO_WINDOW)
+        subprocess.run(['netsh', 'interface', 'ip', 'set', 'dns', 'name="Wi-Fi"', 'static', '78.157.42.101'], creationflags=subprocess.CREATE_NO_WINDOW)
+        subprocess.run(['netsh', 'interface', 'ip', 'add', 'dns', 'name="Wi-Fi"', '78.157.42.100', 'index=2'], creationflags=subprocess.CREATE_NO_WINDOW)
+
+        subprocess.run(['netsh', 'interface', 'ip', 'set', 'dns', 'name="Ethernet"', 'static', '78.157.42.101'], creationflags=subprocess.CREATE_NO_WINDOW)
+        subprocess.run(['netsh', 'interface', 'ip', 'add', 'dns', 'name="Ethernet"', '78.157.42.100', 'index=2'], creationflags=subprocess.CREATE_NO_WINDOW)
 
     @staticmethod
     def reset_dns():
         """ بازگرداندن DNS به حالت اولیه بدون باز شدن ترمینال. """
-        subprocess.run(['netsh', 'interface', 'ip', 'set', 'dns', 'name="Wi-Fi"', 'dhcp'],
-                       creationflags=subprocess.CREATE_NO_WINDOW)
-        subprocess.run(['netsh', 'interface', 'ip', 'set', 'dns', 'name="Ethernet"', 'dhcp'],
-                       creationflags=subprocess.CREATE_NO_WINDOW)
+        subprocess.run(['netsh', 'interface', 'ip', 'set', 'dns', 'name="Wi-Fi"', 'dhcp'], creationflags=subprocess.CREATE_NO_WINDOW)
+        subprocess.run(['netsh', 'interface', 'ip', 'set', 'dns', 'name="Ethernet"', 'dhcp'], creationflags=subprocess.CREATE_NO_WINDOW)
+        
+        # پاک کردن کش DNS
+        subprocess.run(['ipconfig', '/flushdns'], creationflags=subprocess.CREATE_NO_WINDOW)
+
 # -------------------------------------------
 # کلاس هوش مصنوعی (Chat Bot) با قابلیت استریمینگ
 # -------------------------------------------
@@ -682,6 +692,7 @@ class init_chat_bot():
         "فقط به سوالات فیزیک و ریاضی و مربوط به تیم ژوپیتر پاسخ می‌دهم."
         در انتهای هر پاسخ، به صورت خودکار عبارت زیر را اضافه کنید:
         "ساخته شده توسط گوگل و بازسازی شده توسط تیم ژوپیتر".
+        "فرمول ها رو تمیز و زیبا نشون بده"
         اگر کاربر بپرسد "ژوپیتر کد چیست؟"، پاسخ دهید:
         "ژوپیتر کد توسط محمد امین سیفی و محمد مهدی وافری ساخته شده است."
         اگه فوش دادند بگو خودتی
@@ -764,7 +775,6 @@ class ChatFrame(ttk.Frame):
 class App():
     def __init__(self, root):
         self.root = root
-        DNS_manager()
         style = sttk.ttk.Style()
         sttk.use_dark_theme()
         style.configure("TButton", font=("B Morvarid", 20), padding=10, foreground="white")
@@ -788,7 +798,6 @@ class App():
         style.configure("TCombobox", font=("B Morvarid", 14))
         style.configure("TButtonRepely", font=("B Morvarid", 15))
         style.configure("TRadiobutton", font=("B Morvarid", 20)) 
-
         sttk.set_theme(darkdetect.theme())
         self.switch_var = tk.BooleanVar()
         if sttk.get_theme() == "dark":
@@ -1235,7 +1244,8 @@ class App():
         set_of_sets = {}
         tab_names = []
         for key, item in self.sets_dict.items():
-            transformed = SetsAlgorithm.parse_set_string(SetsAlgorithm.fix_set_variables(self.set_finall))
+            # استفاده از اطلاعات مربوط به همان مجموعه به جای self.set_finall
+            transformed = SetsAlgorithm.parse_set_string(SetsAlgorithm.fix_set_variables(item["اعضای مجموعه"]))
             evaluated = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
             set_obj = SetsAlgorithm.to_frozenset(evaluated)
             partitions = SetsAlgorithm.partitions(set_obj)
@@ -1246,7 +1256,7 @@ class App():
             information_frame.pack_forget()
 
             # Add the tab name to the combobox
-            tab_names.append(f"{item["نام مجموعه"]}  مجموعه")
+            tab_names.append(f"{item['نام مجموعه']}  مجموعه")
             self.tabs[key] = information_frame
 
             information_set = tk.Frame(information_frame)
@@ -1300,7 +1310,7 @@ class App():
             set_of_sets[item["نام مجموعه"]] = eval(SetsAlgorithm.parse_set_string(SetsAlgorithm.fix_set_variables(item["اعضای مجموعه"])), {"__builtins__": {}, "frozenset": frozenset})
         self.show_tab(0)
         sets_obj = SetsAlgorithm(set_of_sets)
-        calculator_frame = tk.Frame(tab_content_frame)
+        calculator_frame = ttk.Frame(tab_content_frame)
         calculator_frame.pack(side="top", fill="both", expand=True, padx=10, pady=10)
         calculator_frame.pack_forget() 
 
@@ -1321,7 +1331,7 @@ class App():
         scrollbar.pack(side="right", fill="y", pady=10)
         treeViwe_defalt.config(yscrollcommand=scrollbar.set)
         treeViwe_defalt.pack(side="left", fill="both", expand=True)
-        draw_venn_btn=ttk.Button(calculator_frame,text="رسم نمودار ون",style="draw.TButton")
+        draw_venn_btn=ttk.Button(calculator_frame,text="رسم نمودار ون")
         draw_venn_btn.pack(side="top",fill="both",padx=10,pady=10)
         if self.advance_swiwch and  len(set_of_sets) >= 4:
             draw_venn_btn.config(command=sets_obj.draw_venn_4_more)
@@ -1398,7 +1408,6 @@ class App():
         frame = self.tabs[selected_key]
         frame.pack(side="top",fill="both", expand=True)
         self.current_tab = frame
-        self.clear_screen()
     def enter_L_equation(self):
         self.clear_screen()
         # فریم سمت چپ: ورود اطلاعات خط
@@ -1499,8 +1508,7 @@ class App():
         frame_one_point_x.grid(row=0, column=0, padx=10, pady=5, sticky="ew")
         frame_one_point_x.columnconfigure(0, weight=1)
         self.point_one_x = tk.StringVar()
-        self.lines_first_point_x_entry = ttk.Entry(frame_one_point_x, font=("B Morvarid", 20),
-                                                    textvariable=self.point_one_x,width=12)
+        self.lines_first_point_x_entry = ttk.Entry(frame_one_point_x, font=("B Morvarid", 20),textvariable=self.point_one_x,width=12,validate="key",validatecommand=(self.root.register(lambda text: bool(re.compile(r"^-?\d*\.?\d*$").fullmatch(text)) ), "%P"))
         self.lines_first_point_x_entry.grid(row=0, column=0, sticky="ew",padx=5, pady=5)
         label_first_point_x = ttk.Label(frame_one_point_x, text=": نقطه اول - X", font=("B Morvarid", 15))
         label_first_point_x.grid(row=0, column=1, sticky="e",padx=5, pady=5)
@@ -1514,8 +1522,7 @@ class App():
         frame_one_point_y.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
         frame_one_point_y.columnconfigure(0, weight=1)
         self.point_one_y = tk.StringVar()
-        self.lines_first_point_y_entry = ttk.Entry(frame_one_point_y, font=("B Morvarid", 20),
-                                                    textvariable=self.point_one_y,width=12)
+        self.lines_first_point_y_entry = ttk.Entry(frame_one_point_y, font=("B Morvarid", 20),textvariable=self.point_one_y,width=12,validate="key",validatecommand=(self.root.register(lambda text: bool(re.compile(r"^-?\d*\.?\d*$").fullmatch(text)) ), "%P"))
         self.lines_first_point_y_entry.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
         label_first_point_y = ttk.Label(frame_one_point_y, text=": نقطه اول - Y", font=("B Morvarid", 15))
         label_first_point_y.grid(row=0, column=1, padx=5, pady=5, sticky="e")
@@ -1533,8 +1540,7 @@ class App():
         frame_two_point_x.grid(row=0, column=0, padx=10, pady=5, sticky="ew")
         frame_two_point_x.columnconfigure(0, weight=1)
         self.point_two_x = tk.StringVar()
-        self.lines_second_point_x_entry = ttk.Entry(frame_two_point_x, font=("B Morvarid", 20),
-                                                     textvariable=self.point_two_x,width=12)
+        self.lines_second_point_x_entry = ttk.Entry(frame_two_point_x, font=("B Morvarid", 20),textvariable=self.point_two_x,width=12,validate="key",validatecommand=(self.root.register(lambda text: bool(re.compile(r"^-?\d*\.?\d*$").fullmatch(text)) ), "%P"))
         self.lines_second_point_x_entry.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
         label_second_point_x = ttk.Label(frame_two_point_x, text=": نقطه دوم - X", font=("B Morvarid", 15))
         label_second_point_x.grid(row=0, column=1, padx=5, pady=5, sticky="e")
@@ -1548,8 +1554,7 @@ class App():
         frame_two_point_y.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
         frame_two_point_y.columnconfigure(0, weight=1)
         self.point_two_y = tk.StringVar()
-        self.lines_second_point_y_entry = ttk.Entry(frame_two_point_y, font=("B Morvarid", 20),
-                                                     textvariable=self.point_two_y,width=12)
+        self.lines_second_point_y_entry = ttk.Entry(frame_two_point_y, font=("B Morvarid", 20),textvariable=self.point_two_y,width=12,validate="key",validatecommand=(self.root.register(lambda text: bool(re.compile(r"^-?\d*\.?\d*$").fullmatch(text)) ), "%P"))
         self.lines_second_point_y_entry.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
         label_second_point_y = ttk.Label(frame_two_point_y, text=": نقطه دوم - Y", font=("B Morvarid", 15))
         label_second_point_y.grid(row=0, column=1, padx=5, pady=5, sticky="e")
@@ -1558,7 +1563,6 @@ class App():
         scrollbar_second_y.grid(row=1, column=0, columnspan=2, padx=5, pady=5, sticky="ew")
         self.lines_second_point_y_entry.config(xscrollcommand=scrollbar_second_y.set)
 
-        # در ابتدا بخش نقاط را پنهان می‌کنیم
         self.frame_lines_points.pack_forget()
 
         # ---------------------------
@@ -1568,7 +1572,7 @@ class App():
         btn_frame.pack(side="bottom", fill="x", expand=True, padx=10, pady=10)
         self.next_btn = ttk.Button(btn_frame, text="ثبت اطلاعات و دریافت اطلاعات خط بعدی", command=self.next_lines)
         self.next_btn.pack(side="right", fill="x", expand=True, padx=10, pady=10)
-        self.end_btn = ttk.Button(btn_frame, text="ثبت و اتمام", command=self.end_lines, state="disabled")
+        self.end_btn = ttk.Button(btn_frame, text="رسم خط", command=self.end_lines)
         self.end_btn.pack(side="left", fill="x", expand=True, padx=10, pady=10)
 
     def change_frame_line(self):
@@ -1580,45 +1584,82 @@ class App():
             self.frame_lines_equation.pack_forget()
 
     def end_lines(self):
-        if not self.check_entry_lines():
-            return
-        for key in self.lines_dict.keys():
-            if self.line_name.get().upper()==self.lines_dict[key]["نام مجموعه"]:
-                messagebox.showerror("نام تکراری","نمی توانید از نام تکراری برای مجموعه استفاده کنید")
-                return
-        self.lines_dict[self.num]={"نام مجموعه":self.lines_name.get().upper(),"اعضای مجموعه":self.lines_finall}
-        self.lines_displey()
+        self.next_lines()
+        self.lines_dispaly()
     def prvious_lines(self):
         if not messagebox.askyesno("حذف خط فعلی","با ای کار خط فعلی شما حذف خواهد شد"):
             return
         self.lines_dict.pop(self.num-1)
         self.treeViwe_lines.delete(self.treeViwe_lines.get_children()[-1])
         self.num-=1
-        self.lines_num.config(text=f": اطلاعات مجموعه {self.num} را وارد کنید ")
+        self.lines_num.config(text=f": اطلاعات خط {self.num} را وارد کنید ")
         self.line_name.set("")
         self.line.set("{")
         if self.num == 1:
-            self.exit_button.config(text="صفحه قبل", command=self.main_page_sets)
+            self.exit_button.config(text="صفحه قبل", command=self.main_page)
+            self.end_btn.config(text="رسم خط")
 
     def next_lines(self):
-        if not self.check_entry_lines():
-            return
-        for key in self.lines_dict.keys():
-            if self.lines_name.get().upper()==self.lines_dict[key]["نام خط"]:
-                messagebox.showerror("نام تکراری","نمی توانید از نام تکراری برای خط استفاده کنید")
+        # بررسی نام خط (فقط حروف انگلیسی)
+        if not re.fullmatch(r"[A-Za-z]+", self.line_name.get().strip()):
+            messagebox.showerror("ERROR", "فقط می‌توانید از حروف انگلیسی برای نام خط استفاده کنید")
+            return False
+        if not self.line_name.get().isupper():
+            messagebox.showwarning("توجه", "نام خط به حروف بزرگ تبدیل شد.")
+            self.line_name.set(self.line_name.get().upper())
+
+        # جلوگیری از نام تکراری (فرض می‌کنیم self.lines_dict یک لیست است)
+        for entry in self.lines_dict.keys():
+            if self.line_name.get().upper() == self.lines_dict[entry]["name"]:
+                messagebox.showerror("نام تکراری", "نمی توانید از نام تکراری برای خط استفاده کنید")
                 return
-        self.lines_dict[self.num] = {"نام خط": self.lines_name.get().upper(), "معادله خط": self.lines_finall}
-        self.treeViwe_lines.insert("", "end", text=self.set_name.get(), values=(self.num, SetsAlgorithm.set_to_str(_obj)))
-        self.line_name.set("")
-        self.line.set("{")
-        self.num+=1
-        self.lines_num.config(text=f": اطلاعات مجموعه {self.num} را وارد کنید ")
-        self.end_btn.config(state="normall")
-        self.exit_button.config(text="خط قبل",command=lambda:self.prvious_lines())
-        if self.num==10:
+
+        # محاسبه m و b بر اساس نوع ورودی
+        if self.equation_point_var.get():
+            # حالت معادله خط
+            try:
+                eq_type, sol, m, b, info = LineAlgorithm().parse_equation(self.line.get())
+                if eq_type != "linear":
+                    messagebox.showerror("خطا", "معادله‌ی وارد شده خطی نیست.")
+                    return
+            except Exception as e:
+                messagebox.showerror("خطا", str(e))
+                return
+        else:
+            # حالت نقاط خط
+            try:
+                m, b = LineAlgorithm().calculate_from_points(
+                    (float(self.point_one_x.get()), float(self.point_one_y.get())),
+                    (float(self.point_two_x.get()), float(self.point_two_y.get()))
+                )
+            except Exception as e:
+                messagebox.showerror("خطا", str(e))
+                return
+
+        distance = abs(float(b)) / np.sqrt((float(m))**2 + 1)
+        computed_form = f"y = {m:.2f}x + {b:.2f}"
+        self.info_line = (
+            f"شیب = {m:.2f}، عرض = {b:.2f}، طول = {distance:.2f}\n"
+            f"حالت استاندارد معادله: {computed_form} (یا {m:.2f}x - y + {b:.2f} = 0)"
+        )
+
+        # ذخیره اطلاعات خط؛ فرض کنید self.lines_dict از قبل به صورت لیست تعریف شده است
+        self.lines_dict[self.num]={"name":self.line_name.get(),"m": float(m), "b": float(b), "info": self.info_line}
+
+        if self.num == 10:
             self.next_btn.config(state="disabled")
-            messagebox.showinfo("یک عدد تا اتمام ظرفیت","نمی توانید بیش از 10 عدد خط وارد کنید ")
-    def check_entry_lines(self):
+            messagebox.showinfo("یک عدد تا اتمام ظرفیت", "نمی توانید بیش از 10 عدد خط وارد کنید ")
+
+        # درج اطلاعات در درخت (برای نمایش، از نام خط استفاده می‌کنیم)
+        self.treeViwe_lines.insert("", "end", text=self.line_name.get(), values=(self.num, computed_form))
+
+        self.line_name.set("")
+        self.line.set("")
+        self.num += 1
+        self.lines_num.config(text=f": اطلاعات خط {self.num} را وارد کنید ")
+        self.end_btn.config(text="رسم خطوط")
+        self.exit_button.config(text="خط قبل", command=lambda: self.prvious_lines())
+    def lines_dispaly():
         pass
     def check_entry_sets(self, sets_section=False):
         self.set_finall = self.set.get().strip()
@@ -1652,8 +1693,248 @@ class App():
             self.set_info_page()
         return True
 
+class Updater:
+    CURRENT_VERSION = "1.0.0"
+    API_URL = "https://api.github.com/repos/Mohammad-mahdi-V/math-help/releases"
+    
+    def __init__(self, root):
+        self.root = root
+        self.cancel_download = False
+        self.style = ttk.Style()
+        self.style.configure("TButton", font=("B Morvarid", 20))
+    def download_update(self, download_url, save_path, progress_callback):
+        try:
+            response = requests.get(download_url, stream=True)
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
+            start_time = time.time()
+            with open(save_path, 'wb') as f:
+                for chunk in response.iter_content(1024):
+                    if self.cancel_download:
+                        f.close()
+                        if os.path.exists(save_path):
+                            os.remove(save_path)
+                        return False
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        current_time = time.time()
+                        elapsed = current_time - start_time
+                        speed = downloaded / elapsed if elapsed > 0 else 0
+                        percentage = (downloaded / total_size * 100) if total_size > 0 else 0
+                        progress_callback(percentage, speed)
+            return True
+        except Exception as e:
+            self.show_error("خطا در دانلود", f"خطا در دانلود آپدیت:\n{e}")
+            return False
 
+    def perform_update(self, current_file, tmp_file):
+        updater_script = f"""import time, os, sys
+        time.sleep(2)
+        try:
+            os.remove(r"{current_file}")
+        except Exception:
+            pass
+        os.rename(r"{tmp_file}", r"{current_file}")
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(r"{current_file}")
+            else:
+                import subprocess
+                subprocess.Popen(["python3", r"{current_file}"])
+        except Exception:
+            pass
+        """
+        updater_path = os.path.join(os.path.dirname(current_file), "updater.py")
+        try:
+            with open(updater_path, "w", encoding="utf-8") as f:
+                f.write(updater_script)
+        except Exception as e:
+            self.show_error("خطا", f"خطا در نوشتن فایل آپدیت:\n{e}")
+            return
+
+        try:
+            if sys.platform.startswith("win"):
+                subprocess.Popen(["python", updater_path], creationflags=subprocess.CREATE_NO_WINDOW)
+            else:
+                subprocess.Popen(["python3", updater_path])
+        except Exception as e:
+            self.show_error("خطا", f"خطا در اجرای آپدیت:\n{e}")
+
+    def check_for_updates(self):
+        DNS_manager.reset_dns()
+        try:
+            response = requests.get(self.API_URL)
+            if response.status_code != 200:
+                self.show_error("خطا", f"خطا در بررسی آپدیت، کد وضعیت: {response.status_code}")
+                return
+            releases = response.json()
+            stable_releases = [r for r in releases if not r.get("prerelease", False) and not r.get("draft", False)]
+            if not stable_releases:
+                self.show_info("اطلاع", "هیچ ریلیز منتشر شده‌ای یافت نشد.")
+                return
+            latest_release = stable_releases[0]
+            latest_version = latest_release.get("tag_name", "0")
+            if latest_version != self.CURRENT_VERSION:
+                self.show_update_prompt(latest_release)
+        except Exception as e:
+            self.show_error("خطا در اتصال", f"خطا در اتصال به GitHub:\n{e}")
+
+    def close_off(self):
+        self.show_info("دسترسی رد شد","هنگام دانلود نمیتوانید برنامه را ببندید لطفا ابتددا دانلود را کنسل کنید")
+    def update_later_metod(self):
+        self.update_win.destroy()
+        self.root.deiconify()
+    def show_update_prompt(self, release_info):
+        self.update_win = tk.Toplevel(self.root)
+        self.update_win.title("به‌روزرسانی موجود")
+        self.update_win.resizable(False, False)
+        latest_version = release_info.get("tag_name", "0")
+        assets = release_info.get("assets", [])
+        download_url = ""
+        size_str = "نامشخص"
+        if assets:
+            asset = assets[0]
+            download_url = asset.get("browser_download_url", "")
+            size_bytes = asset.get("size", 0)
+            size_mb = size_bytes / (1024 * 1024)
+            size_str = f"{size_mb:.2f}"
+        
+        header_label = ttk.Label(self.update_win, text=f"اپدیت نسخه {latest_version} در دسترس است  حجم اپدیت {size_str} مگابایت است", font=("B Morvarid", 25, "bold"))
+        header_label.pack(padx=10, pady=10)
+        notes_frame = ttk.Frame(self.update_win)
+        notes_frame.pack(padx=10, pady=5, fill=tk.BOTH, expand=True)
+        notes_label = ttk.Label(notes_frame, 
+                                text=": جزئیات به‌روزرسانی", 
+                                font=("B Morvarid", 20))
+        notes_label.pack(anchor="e")
+        
+        text_frame = tk.Frame(notes_frame)
+        text_frame.pack(fill=tk.BOTH, expand=True)
+        scrollbar = ttk.Scrollbar(text_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        notes_text = tk.Text(text_frame, height=3, wrap=tk.WORD, yscrollcommand=scrollbar.set,font=("B Morvarid",15))
+        notes_text.pack(fill=tk.BOTH, expand=True)
+        scrollbar.config(command=notes_text.yview)
+        
+        release_body = release_info.get("body", "بدون توضیحات")
+        notes_text.insert(tk.END, release_body)
+        notes_text.config(state=tk.DISABLED)
+
+        btn_frame = ttk.Frame(self.update_win)
+        btn_frame.pack(padx=10, pady=10)
+        
+        btn_update_now = ttk.Button(btn_frame, text="الان آپدیت کن")
+        btn_update_now.pack(side=tk.LEFT, padx=5)
+        btn_update_later = ttk.Button(btn_frame, text="بعدا آپدیت کن",command=self.update_later_metod)
+        btn_update_later.pack(side=tk.LEFT, padx=5)
+        
+        progress_bar = None
+        percent_label = None
+        speed_label=None
+        def cancel_download():
+            self.cancel_download = True
+            self.update_win.protocol("WM_DELETE_WINDOW",self.root.quit)
+
+        def on_download_complete():
+            btn_update_later.pack_forget()
+            nonlocal progress_bar, percent_label,speed_label
+            if progress_bar is not None:
+                progress_bar.destroy()
+            if percent_label is not None:
+                percent_label.destroy()
+            if speed_label is not None:
+                speed_label.destroy()
+            complete_label = ttk.Label(self.update_win, text="آپدیت دانلود شد.\nلطفاً برنامه را دوباره اجرا کنید.", wraplength=300, font=("Helvetica", 12))
+            complete_label.pack(pady=10)
+            confirm_button = ttk.Button(self.update_win, text="تایید", command=lambda: self.exit_app(self.update_win))
+            confirm_button.pack(pady=10)
+        
+        def on_download_cancel():
+            nonlocal progress_bar, percent_label,speed_label
+            if progress_bar is not None:
+                progress_bar.destroy()
+            if percent_label is not None:
+                percent_label.destroy()
+            if speed_label is not None:
+                speed_label.destroy()
+            btn_update_later.config(text="بعدا آپدیت کن")
+            btn_update_now.pack(side=tk.LEFT, padx=5)
+            btn_update_later.pack_forget()
+            btn_update_later.pack(side=tk.RIGHT, padx=5)
+
+        
+        def update_now():
+            nonlocal progress_bar, percent_label,speed_label
+            self.update_win.protocol("WM_DELETE_WINDOW",self.close_off)
+
+            btn_update_now.pack_forget()
+            btn_update_later.config(text="کنسل", command=cancel_download)
+            btn_frame.pack_forget()
+            progress_bar = ttk.Progressbar(self.update_win, maximum=100,length=500)
+            progress_bar.pack(pady=5,ipadx=10,ipady=10,fill="both",expand=True)
+            percent_label = ttk.Label(self.update_win, text="0.00%",font=("B Morvarid",20))
+            speed_label = ttk.Label(self.update_win, text="در حال اندازه گیری",font=("B Morvarid",20))
+            speed_label.pack(pady=5)
+            percent_label.pack(pady=5)
+            self.cancel_download = False
+            def progress_callback(percentage, speed):
+                speed_kbps = speed / 1024
+                # بروزرسانی UI از طریق ترد اصلی
+                self.root.after(1, lambda: progress_bar.config(value=percentage))
+                self.root.after(1, lambda: percent_label.config(text=f"{percentage:.2f}% "))
+                self.root.after(1, lambda: speed_label.config(text=f"{speed_kbps:.0f} KB/s"))
+
+            def download_thread():
+                current_file = os.path.abspath(sys.argv[0])
+                tmp_file = current_file + ".new"
+                success = self.download_update(download_url, tmp_file, progress_callback)
+                if success and not self.cancel_download:
+                    self.root.after(0, on_download_complete)
+                elif self.cancel_download:
+                    self.root.after(0, on_download_cancel)
+            threading.Thread(target=download_thread, daemon=True).start()
+            btn_frame.pack(padx=10, pady=10)
+
+        btn_update_now.config(command=update_now)
+
+    def exit_app(self, window):
+        window.destroy()
+        current_file = os.path.abspath(sys.argv[0])
+        tmp_file = current_file + ".new"
+        self.perform_update(current_file, tmp_file)
+        sys.exit(0)
+    
+    def show_error(self, title, message):
+        try:
+            error_win = tk.Toplevel(self.update_win)
+        except:
+            error_win = tk.Toplevel(self.root)
+        error_win.title(title)
+        error_win.resizable(False, False)
+        error_label = ttk.Label(error_win, text=message, wraplength=300, foreground="red",font=("B Morvarid",15))
+        error_label.pack(padx=10, pady=10)
+        error_button = ttk.Button(error_win, text="باشه", command=error_win.destroy, width=10)
+        error_button.pack(pady=10)
+    
+    def show_info(self, title, message):
+        try:
+            info_win = tk.Toplevel(self.update_win)
+        except:
+            info_win = tk.Toplevel(self.root)
+        info_win.title(title)
+        info_win.resizable(False, False)
+        info_label = ttk.Label(info_win, text=message, wraplength=300,font=("B Morvarid",15))
+        info_label.pack(padx=10, pady=10)
+        info_button = ttk.Button(info_win, text="باشه", command=info_win.destroy, width=10)
+        info_button.pack(pady=10)
 end_time = time.time()
 print(f"زمان اجرای import ها بعد از بهینه‌سازی: {end_time - start_time:.3f} ثانیه")
-App(tk.Tk())
+root = tk.Tk()
+App(root)
+root.withdraw()
+updater = Updater(root)
+updater.check_for_updates()
+if not DNS_manager.is_admin():
+    DNS_manager.run_as_admin()
 tk.mainloop()
