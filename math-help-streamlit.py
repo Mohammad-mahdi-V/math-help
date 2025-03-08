@@ -73,12 +73,15 @@ class SetsAlgorithm:
                     while i < len(s) and (s[i].isalnum() or s[i] == '_'):
                         i += 1
                     token = s[start:i]
-                    tokens.append(token)
+                    tokens.append(token)  # دیگر نیازی به افزودن کوتیشن نیست
             return " ".join(tokens), i
 
         def parse_set(s: str, i: int):
+            """
+            پردازش مجموعه‌ها، تبدیل مجموعه‌های تو در تو به frozenset و حذف عناصر تکراری
+            """
             i += 1  # رد کردن '{'
-            elements = []
+            elements = []  # لیست برای ذخیره اعضا
             current_chars = []
             while i < len(s):
                 if s[i].isspace():
@@ -88,22 +91,22 @@ class SetsAlgorithm:
                     if current_chars:
                         token = "".join(current_chars).strip()
                         if token:
-                            elements.append(token)
+                            elements.append(token)  # دیگر نیازی به افزودن کوتیشن نیست
                         current_chars = []
                     nested_set, i = parse_set(s, i)
-                    elements.append(f"frozenset({nested_set})")
+                    elements.append(f"frozenset({nested_set})")  # نباید داخل {} اضافه شود
                 elif s[i] == '}':
                     if current_chars:
                         token = "".join(current_chars).strip()
                         if token:
-                            elements.append(token)
+                            elements.append(token)  # دیگر نیازی به افزودن کوتیشن نیست
                     i += 1
                     break
                 elif s[i] == ',':
                     if current_chars:
                         token = "".join(current_chars).strip()
                         if token:
-                            elements.append(token)
+                            elements.append(token)  # دیگر نیازی به افزودن کوتیشن نیست
                         current_chars = []
                     i += 1
                 else:
@@ -113,21 +116,28 @@ class SetsAlgorithm:
             return f"{{{inner}}}", i
 
         parsed, _ = parse_expr(s, 0)
-        parsed = parsed if parsed != "{}" else "set()"
+        parsed = parsed if parsed != "{}" else "set()"  # جلوگیری از NameError
         return parsed
 
 
     @staticmethod
     def fix_set_variables(expression: str) -> str:
+        """
+        تبدیل متغیرهای غیرعددی داخل مجموعه‌ها و زیرمجموعه‌ها به رشته،
+        به‌طوری که اگر یک عنصر قبلاً در کوتیشن قرار نگرفته باشد، آن را در کوتیشن قرار می‌دهد.
+        """
         result = []
         token = ""
-        brace_level = 0
+        brace_level = 0  # برای پیگیری سطح آکولاد
         i = 0
         while i < len(expression):
             ch = expression[i]
+            # نادیده گرفتن فاصله‌های خالی
             if ch.isspace():
                 i += 1
                 continue
+
+            # اگر کاراکتر شروع کوتیشن است، کل رشته کوتیشن‌دار را جمع‌آوری می‌کنیم
             if ch == '"':
                 token += ch
                 i += 1
@@ -135,10 +145,13 @@ class SetsAlgorithm:
                     token += expression[i]
                     i += 1
                 if i < len(expression):
-                    token += expression[i]
+                    token += expression[i]  # اضافه کردن کوتیشن پایانی
                     i += 1
                 continue
+
+            # اگر آکولاد باز باشد
             if ch == '{':
+                # قبل از اضافه کردن آکولاد، توکن جاری را پردازش می‌کنیم
                 if token:
                     fixed_token = token.strip()
                     if brace_level > 0 and fixed_token and not fixed_token.isdigit() and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
@@ -149,6 +162,8 @@ class SetsAlgorithm:
                 result.append(ch)
                 i += 1
                 continue
+
+            # اگر آکولاد بسته باشد
             elif ch == '}':
                 if token:
                     fixed_token = token.strip()
@@ -160,6 +175,8 @@ class SetsAlgorithm:
                 brace_level -= 1
                 i += 1
                 continue
+
+            # اگر جداکننده (مثل کاما یا عملگرها) باشد
             elif ch == ',' or ch in "|&-()":
                 if token:
                     fixed_token = token.strip()
@@ -170,43 +187,64 @@ class SetsAlgorithm:
                 result.append(ch)
                 i += 1
                 continue
+
+            # در غیر این صورت، کاراکتر را به توکن اضافه می‌کنیم
             else:
                 token += ch
                 i += 1
+
+        # پردازش توکن باقی‌مانده در انتها
         if token:
             fixed_token = token.strip()
             if brace_level > 0 and fixed_token and not fixed_token.isdigit() and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
                 fixed_token = f'"{fixed_token}"'
             result.append(fixed_token)
+            
         return "".join(result)
 
 
     @staticmethod
     def to_frozenset(obj):
+        """
+        تبدیل یک شی (در صورت اینکه مجموعه یا frozenset باشد) به frozenset.
+        این تابع به صورت بازگشتی روی عناصر اعمال می‌شود.
+        """
         if isinstance(obj, (set, frozenset)):
             return frozenset(SetsAlgorithm.to_frozenset(x) for x in obj)
         return obj
 
     @staticmethod
     def subsets_one_set(given_set):
+        """
+        محاسبه زیرمجموعه‌های یک مجموعه.
+        - در صورت طول مجموعه بزرگتر از 10، فقط 10 دسته زیرمجموعه را محاسبه می‌کند.
+        """
         num_loop = 0
         if not isinstance(given_set, str):
             given_set = repr(given_set)
         given_set = eval(given_set)
+        # ایجاد دیکشنری برای ذخیره زیرمجموعه‌ها
         if len(given_set) >= 11:
-            subsets_dict = {f" زیرمجموعه{i}عضوی": [] for i in range(11)}
+            subsets_dict = {f"زیرمجموعه {i} عضوی": [] for i in range(11)}
         else:
-            subsets_dict = {f" زیرمجموعه{i}عضوی": [] for i in range(len(given_set)+1)}
+            subsets_dict = {f"زیرمجموعه {i} عضوی": [] for i in range(len(given_set)+1)}
         for i in range(len(given_set) + 1):
             if num_loop > 10:
                 break
             for subset in combinations(given_set, i):
-                subsets_dict[f" زیرمجموعه{i}عضوی"].append(subset)
+                # تبدیل tuple به رشته با آکولاد
+                subset_str = "{" + ", ".join(map(str, subset)) + "}"
+                subsets_dict[f"زیرمجموعه {i} عضوی"].append(subset_str)
             num_loop += 1
         return subsets_dict
 
     @staticmethod
     def partitions(given_set):
+        """
+        محاسبه افرازهای مجموعه
+        - در صورت مجموعه‌های کوچکتر از 6 عضو، همه افرازها را بازمی‌گرداند.
+        - در غیر این صورت، بیشترین 100 افراز را برمی‌گرداند.
+        """
         if len(given_set) <= 5:
             return list(set_partitions(given_set))
         else:
@@ -219,20 +257,54 @@ class SetsAlgorithm:
                 else:
                     break
             return partition_list
-
+    @staticmethod
+    def partitions_to_str(given_set):
+        """
+        تبدیل افرازهای مجموعه به رشته:
+        - برای هر افراز (که شامل چند زیرمجموعه است)، هر زیرمجموعه به صورت {a, b, ...} نمایش داده می‌شود.
+        - زیرمجموعه‌ها با " | " از هم جدا می‌شوند.
+        """
+        # ابتدا افرازهای مجموعه را محاسبه می‌کنیم
+        partitions = SetsAlgorithm.partitions(given_set)
+        partitions_str = []
+        for partition in partitions:
+            # هر partition یک لیست از زیرمجموعه‌ها (tupleها) است.
+            subset_strs = []
+            for subset in partition:
+                # تبدیل tuple به رشته با آکولاد
+                subset_str = "{" + ", ".join(map(str, subset)) + "}"
+                subset_strs.append(subset_str)
+            # اتصال زیرمجموعه‌ها با جداکننده
+            partitions_str.append(" | ".join(subset_strs))
+        return partitions_str
     def U(self, bitmask):
+        """
+        محاسبه اتحاد مجموعه‌ها بر اساس بیت‌ماس.
+        - مجموعه‌هایی که در بیت‌ماس انتخاب شده‌اند را اتحاد می‌کند.
+        """
         return set().union(*(self.sets[i] for i in range(self.num_sets) if bitmask & (1 << i)))
 
     def I(self, bitmask):
+        """
+        محاسبه اشتراک مجموعه‌ها بر اساس بیت‌ماس.
+        - تنها مجموعه انتخاب شده در بیت‌ماس را در نظر می‌گیرد.
+        """
         selected_sets = [self.sets[i] for i in range(self.num_sets) if bitmask & (1 << i)]
         return set.intersection(*selected_sets)
 
     def Ms(self, bitmask, target_bit):
+        """
+        محاسبه تفاضل مجموعه:
+        - از مجموعه هدف، سایر مجموعه‌های انتخاب شده (با حذف هدف) را کم می‌کند.
+        """
         main_set = self.sets[target_bit]
         other_sets = self.U(bitmask & ~(1 << target_bit))
         return main_set - other_sets
 
     def check_other_information(self):
+        """
+        بررسی اطلاعات دیگر بین مجموعه‌ها از جمله زیرمجموعه بودن و عدم زنجیره‌ای بودن.
+        """
         info = {
             "subsets_info": {
                 f"Set {self.set_names[i]}": {
@@ -246,21 +318,37 @@ class SetsAlgorithm:
                 for i in range(self.num_sets) for j in range(i + 1, self.num_sets)
             )
         }
+
         info["all_sets_antychain"] = not info["all_sets_chain"]
         return info
 
+
+
     def U_I_Ms_advance(self, text):
+
+        # جایگزینی علائم ∩ و ∪ با معادل‌های Python
         text = text.replace('∩', '&').replace('∪', '|')
+
+        # اصلاح متغیرهای داخل مجموعه‌ها
         text = SetsAlgorithm.fix_set_variables(text)
-        outside_braces = re.split(r'\{[^{}]*\}', text)
-        found_vars = re.findall(r'\b[A-Za-z_][A-Za-z0-9_]*\b', " ".join(outside_braces))
+
+        # استخراج قسمت‌هایی که خارج از `{}` هستند
+        outside_braces = re.split(r'\{[^{}]*\}', text)  # فقط بخش‌های بیرون از `{}` را جدا می‌کند.
+        found_vars = re.findall(r'\b[A-Za-z_][A-Za-z0-9_]*\b', " ".join(outside_braces))  # استخراج نام متغیرها
+        # بررسی اینکه آیا متغیرهای **خارج از `{}`** در `self.set_of_sets` تعریف شده‌اند
         for var in found_vars:
             if var.upper() not in self.set_of_sets:
                 messagebox.showerror("خطا", f"متغیر '{var}' تعریف نشده است!")
-                return "در انتظار دریافت عبارت..."
+                return "در انتظار دریافت عبارت..."  # برای جلوگیری از هنگ کردن، مقدار پیش‌فرض بازگردانی شود.
+
+        # تبدیل رشته‌ی ورودی به فرم پردازش‌شده
         transformed_text = SetsAlgorithm.parse_set_string(text)
+
+        # تعریف متغیرهای موجود
         variables = {name: frozenset(set_val) for name, set_val in self.set_of_sets.items()}
+        # اضافه کردن نسخه‌های با حروف کوچک
         variables.update({name.lower(): frozenset(set_val) for name, set_val in self.set_of_sets.items()})
+
         try:
             result = eval(transformed_text, {"__builtins__": {}, "frozenset": frozenset}, variables)
             return self.set_to_str(result)
@@ -268,17 +356,36 @@ class SetsAlgorithm:
             messagebox.showerror("خطا در پردازش", f"خطا در ارزیابی عبارت:\n{e}")
             return "در انتظار دریافت عبارت..."
 
+
     @staticmethod
     def set_to_str(result):
-        if isinstance(result, frozenset):
-            return "{" + ", ".join(str(item) if not isinstance(item, frozenset) else SetsAlgorithm.set_to_str(item) for item in result) + "}"
-        elif isinstance(result, set):
-            return "{" + ", ".join(str(item) if not isinstance(item, frozenset) else SetsAlgorithm.set_to_str(item) for item in result) + "}"
+        """
+        تبدیل نتیجه مجموعه به رشته:
+        - خروجی در داخل آکولاد {} نمایش داده می‌شود.
+        - اعضای مجموعه به صورت ساده (بدون کوتیشن) نمایش داده می‌شوند.
+        """
+        if isinstance(result, (set, frozenset)):
+            def format_item(item):
+                if isinstance(item, (set, frozenset)):
+                    return SetsAlgorithm.set_to_str(item)
+                elif isinstance(item, str):
+                    # اگر رشته با " یا ' شروع و پایان یافته، آن‌ها را حذف کن
+                    if (item.startswith('"') and item.endswith('"')) or (item.startswith("'") and item.endswith("'")):
+                        return item[1:-1]
+                    return item
+                else:
+                    return str(item)
+            return "{" + ", ".join(format_item(item) for item in result) + "}"
         else:
             return str(result)
 
     def draw_venn(self):
+        
+        """
+        رسم نمودار ون برای دو یا سه مجموعه.
+        """
         if self.num_sets == 3:
+            # ارزیابی هر مجموعه با استفاده از safe_eval
             set_one = SetsAlgorithm.safe_eval(self.sets[0])
             set_two = SetsAlgorithm.safe_eval(self.sets[1])
             set_three = SetsAlgorithm.safe_eval(self.sets[2])
@@ -343,30 +450,53 @@ class SetsAlgorithm:
                 )
         else:
             return
+
+
         plt.show()
 
     def draw_venn_4_more(self):
+        """
+        رسم نمودار ون برای 4 یا چند مجموعه درون یک فریم Tkinter.
+        این تابع نمودار را داخل parent_frame قرار می‌دهد.
+        """
+        # تنظیم اندازه شکل با ارتفاع کمتر
         fig = plt.figure(figsize=(10, 5))
         ax = fig.add_subplot(111)
+
+        # آماده‌سازی داده‌های نمودار ون با تغییر نام به "مجموعه X"
         venn_data = {}
         for i in range(self.num_sets):
             name = self.set_names[i]
             if name.startswith("Set "):
                 name = name.replace("Set ", "مجموعه ")
+            # تبدیل مقدار به set به صورت صریح
             venn_data[name] = SetsAlgorithm.safe_eval(self.sets[i])
         print(venn_data)
         print(type(venn_data))
         venn_data = {k: set(v) for k, v in venn_data.items()}
+
+        # رسم نمودار ون روی محور مشخص (ax)
+        # توجه: اگر تابع venn.venn از پارامتر ax پشتیبانی نکند،
+        # ممکن است نیاز به تغییرات جزئی داشته باشید یا از یک کتابخانه‌ی متفاوت استفاده کنید.
         venn.venn(venn_data, ax=ax)
+        
+        # ذخیره نمودار در صورت وجود مسیر خروجی
         fig.show()
+
 
     @staticmethod
     def safe_eval(s):
+
         if isinstance(s, (set, frozenset)):
             return frozenset(s)
         return eval(s if isinstance(s, str) else repr(s), {"__builtins__": {}, "frozenset": frozenset})
 
     def get_region_info(self):
+        """
+        محاسبه اطلاعات نواحی نمودار ون:
+        - برای هر ترکیب از مجموعه‌ها، ناحیه مربوطه محاسبه می‌شود.
+        - نواحی دارای محتوا، به همراه نمادگذاری مناسب برگردانده می‌شوند.
+        """
         result = {}
         sets_names = self.set_names
         sets_dict = self.set_of_sets
@@ -422,6 +552,7 @@ class App:
                 src: url(data:font/woff;base64,{encoded_font}) format('woff');
                 font-display: fallback;
             }}
+            
             .st-emotion-cache-1p9ibxm h1, .st-emotion-cache-1p9ibxm h2, .st-emotion-cache-1p9ibxm h3, 
             .st-emotion-cache-1p9ibxm h4, .st-emotion-cache-1p9ibxm h5, .st-emotion-cache-1p9ibxm h6, 
             .st-emotion-cache-1p9ibxm span {{
@@ -435,8 +566,9 @@ class App:
             }}
             html, body, [class*="st-"] {{
                 font-family: 'Farhang' !important;
-                font-size:22px;
+                font-size:22px !important;
             }}
+
             .stMain {{
                 direction: rtl !important;
             }}
@@ -619,6 +751,7 @@ class App:
 
         if st.session_state["show_hr_sidebar"]:
             st.sidebar.markdown("<hr>", unsafe_allow_html=True)
+            self.more_opition=st.sidebar.empty()
         st.sidebar.markdown("<hr>", unsafe_allow_html=True)
         col1, col2 = st.sidebar.columns([1, 1])
         with col1:
@@ -656,6 +789,23 @@ class App:
                 self.display_sets()
 
     def sets_section(self):
+        defaults = {
+            "disabled_advanced_btn": False,
+            "disabled_next_set_btn": False,
+            "sets_data": [],
+            "show_error_expander": False,
+            "error_message": "",
+            "error_type": "error",
+            "confirm_prev": False,
+            "pending_delete_confirm": False,
+            "pending_delete_data": [],
+            "advanced_quesion": False,
+            "notifications": [],
+            "confirm_delete_open": False,
+            "confirm_delete_table":False
+        }
+        for key, val in defaults.items():
+            st.session_state[key] = val
         st.markdown("<h1 style='color: #ff0000; text-align:center;'>مجموعه‌ها</h1>", unsafe_allow_html=True)
         st.toggle("حالت پیشرفته", key="show_advanced", on_change=self.on_advanced_toggle,
                   disabled=st.session_state["disabled_advanced_btn"])
@@ -674,8 +824,17 @@ class App:
         if next_btn:
             self.next_set()
         if end_btn:
-            st.session_state["current_section"] = "display_sets"  # یک مقدار جدید برای نمایش نتایج
-            st.rerun()
+            if not self.check_sets_input():
+                pass
+            else:
+                st.session_state["sets_data"].append({
+                    "نام مجموعه": self.name_set.upper(),
+                    "مقدار مجموعه": self.set_input
+                })
+
+                st.session_state["show_hr_sidebar"] = True
+                st.session_state["current_section"] = "display_sets"  # یک مقدار جدید برای نمایش نتایج
+                st.rerun()
         self.render_notification()
 
     def show_lines_section(self):
@@ -844,9 +1003,50 @@ class App:
             st.session_state["disabled_next_set_btn"] = True
 
     def display_sets(self):
-        st.write("مجموعه‌ها پردازش شدند!")
-        for set_data in st.session_state["sets_data"]:
-            st.write(f"نام مجموعه: {set_data['نام مجموعه']}, مقدار مجموعه: {set_data['مقدار مجموعه']}")
+
+        set_of_sets={}
+        for dic in st.session_state["sets_data"]:
+            set_of_sets[dic["نام مجموعه"]] = eval(SetsAlgorithm.parse_set_string(SetsAlgorithm.fix_set_variables(str(dic["مقدار مجموعه"]))), {"__builtins__": {}, "frozenset": frozenset})
+        sets=SetsAlgorithm(set_of_sets)
+        menu_options = list(set_of_sets.keys()) + ["اطلاعات دیگر", "محاسبات"]
+        self.selected_option = self.more_opition.selectbox("انتخاب مجموعه یا بخش", menu_options)
+        if self.selected_option in set_of_sets:
+            selected_set=set_of_sets[self.selected_option]
+            transformed = SetsAlgorithm.parse_set_string(SetsAlgorithm.fix_set_variables(str(selected_set)))
+            evaluated = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
+            set_obj = SetsAlgorithm.to_frozenset(evaluated)
+            col1,col2,col3=st.columns([2,3,1])
+            col1.write(f"نام مجموعه : {self.selected_option}")
+            col2.write(f"اعضای مجموعه : {SetsAlgorithm.set_to_str(set_obj)}",unsafe_allow_html=True)
+            col3.write(f"تعداد اعضای مجموعه : {len(selected_set)}")
+            st.divider()
+            col1,col2=st.columns([1,1])
+            subsets = SetsAlgorithm.subsets_one_set(selected_set)
+
+            # لیست برای نگهداری داده‌های جدول
+            subset_list = []
+            for key, value in subsets.items():
+                for item in value:
+                    subset_list.append((key, item))  # (نوع زیرمجموعه، مقدار)
+
+            # ایجاد DataFrame همراه با شماره‌گذاری
+            df_subsets = pd.DataFrame({
+                "شماره": range(1, len(subset_list) + 1),  # شماره‌گذاری
+                "زیرمجموعه": [s[1] for s in subset_list],  # مقدار زیرمجموعه
+                "نوع زیرمجموعه": [s[0] for s in subset_list]  # نام دسته زیرمجموعه (n عضوی)
+            })
+            with col1.expander("زیر مجموعه ها"):
+            # نمایش در Streamlit
+                st.dataframe(df_subsets,use_container_width=True,hide_index=True)
+
+            part = SetsAlgorithm.partitions_to_str(selected_set)
+
+            df_part = pd.DataFrame({
+                "شماره": range(1, len(part) + 1),  
+                "افراز": part  
+            })
+            with col2.expander("افراز ها"):
+                st.dataframe(df_part,hide_index=True,use_container_width=True)
 
 if __name__ == "__main__":
     App()
