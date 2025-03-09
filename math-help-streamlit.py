@@ -29,6 +29,8 @@ import numpy as np
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
 import requests
 import webbrowser
+from io import BytesIO
+
 
 # --------------------------------------------------
 # کلاس SetsAlgorithm (بدون تغییر عمده)
@@ -325,36 +327,29 @@ class SetsAlgorithm:
 
 
     def U_I_Ms_advance(self, text):
-
         # جایگزینی علائم ∩ و ∪ با معادل‌های Python
         text = text.replace('∩', '&').replace('∪', '|')
 
         # اصلاح متغیرهای داخل مجموعه‌ها
         text = SetsAlgorithm.fix_set_variables(text)
 
-        # استخراج قسمت‌هایی که خارج از `{}` هستند
-        outside_braces = re.split(r'\{[^{}]*\}', text)  # فقط بخش‌های بیرون از `{}` را جدا می‌کند.
-        found_vars = re.findall(r'\b[A-Za-z_][A-Za-z0-9_]*\b', " ".join(outside_braces))  # استخراج نام متغیرها
-        # بررسی اینکه آیا متغیرهای **خارج از `{}`** در `self.set_of_sets` تعریف شده‌اند
+        # استخراج قسمت‌هایی که خارج از {} هستند
+        outside_braces = re.split(r'\{[^{}]*\}', text)
+        found_vars = re.findall(r'\b[A-Za-z_][A-Za-z0-9_]*\b', " ".join(outside_braces))
+        # بررسی متغیرهای خارج از {} در self.set_of_sets
         for var in found_vars:
             if var.upper() not in self.set_of_sets:
-                messagebox.showerror("خطا", f"متغیر '{var}' تعریف نشده است!")
-                return "در انتظار دریافت عبارت..."  # برای جلوگیری از هنگ کردن، مقدار پیش‌فرض بازگردانی شود.
+                return f"متغیر '{var}' تعریف نشده است!"
 
-        # تبدیل رشته‌ی ورودی به فرم پردازش‌شده
         transformed_text = SetsAlgorithm.parse_set_string(text)
-
-        # تعریف متغیرهای موجود
         variables = {name: frozenset(set_val) for name, set_val in self.set_of_sets.items()}
-        # اضافه کردن نسخه‌های با حروف کوچک
         variables.update({name.lower(): frozenset(set_val) for name, set_val in self.set_of_sets.items()})
 
         try:
             result = eval(transformed_text, {"__builtins__": {}, "frozenset": frozenset}, variables)
             return self.set_to_str(result)
         except Exception as e:
-            messagebox.showerror("خطا در پردازش", f"خطا در ارزیابی عبارت:\n{e}")
-            return "در انتظار دریافت عبارت..."
+            return f"خطا در ارزیابی عبارت:\n{e}"
 
 
     @staticmethod
@@ -380,10 +375,10 @@ class SetsAlgorithm:
             return str(result)
 
     def draw_venn(self):
-        
         """
         رسم نمودار ون برای دو یا سه مجموعه.
         """
+        fig, ax = plt.subplots()
         if self.num_sets == 3:
             # ارزیابی هر مجموعه با استفاده از safe_eval
             set_one = SetsAlgorithm.safe_eval(self.sets[0])
@@ -449,10 +444,9 @@ class SetsAlgorithm:
                     SetsAlgorithm.set_to_str(set(set_one) & set(set_two))
                 )
         else:
-            return
+            return None
 
-
-        plt.show()
+        return fig
 
     def draw_venn_4_more(self):
         """
@@ -481,8 +475,7 @@ class SetsAlgorithm:
         venn.venn(venn_data, ax=ax)
         
         # ذخیره نمودار در صورت وجود مسیر خروجی
-        fig.show()
-
+        return fig
 
     @staticmethod
     def safe_eval(s):
@@ -610,7 +603,7 @@ class App:
                 box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15) !important;
                 background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0)) !important;
             }}
-            div.stButton > button {{
+            div.stButton > button ,[data-testid="stBaseButton-secondary"]{{
                 background-color: rgb(13, 110, 253) !important;
                 color: white !important;
                 border-radius: 100px !important;
@@ -624,6 +617,10 @@ class App:
                 padding:0 ;
             }}
             div.stButton > button p {{
+                font-size: 19px !important;
+                font-weight: 200 !important;
+            }}
+            div.stButton > button p ,[data-testid="stBaseButton-secondary"] p {{
                 font-size: 19px !important;
                 font-weight: 200 !important;
             }}
@@ -652,7 +649,7 @@ class App:
                     min-width:100px
                 }}
             }}
-            div.stButton > button:hover {{
+            div.stButton > button:hover ,[data-testid="stBaseButton-secondary"]:hover{{
                 background: rgb(17, 72, 151) !important;
                 transform: scale(1.05) !important;
             }}
@@ -671,7 +668,7 @@ class App:
             input {{
                 font-size: 23px !important;
             }}
-            div.stButton > button:active {{
+            div.stButton > button:active ,[data-testid="stBaseButton-secondary"]:active {{
                 background: rgb(38, 63, 100) !important;
                 transform: scale(0.95) !important;
                 box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2) !important;
@@ -705,7 +702,9 @@ class App:
             "advanced_quesion": False,
             "notifications": [],
             "confirm_delete_open": False,
-            "confirm_delete_table":False
+            "confirm_delete_table":False,
+            "calc_result":"در انتظار عبارت",
+            "venn_fig":None
         }
         for key, val in defaults.items():
             if key not in st.session_state:
@@ -717,8 +716,8 @@ class App:
             "error_type": error_type
         })
 
-    def render_notification(self,):
-        with self.notification_placeholder.container():
+    def render_notification(self,frame):
+        with frame.container():
             if st.session_state["notifications"]:
                 for index, noti in enumerate(st.session_state["notifications"][:]):
                     with st.expander("خطا" if noti["error_type"]=="error" else "اطلاع", expanded=True):
@@ -740,6 +739,25 @@ class App:
             if st.button("مجموعه‌ها", use_container_width=True):
                 st.session_state["current_section"] = "sets"
                 st.session_state["show_hr_sidebar"] = False
+                defaults = {
+                "disabled_advanced_btn": False,
+                "disabled_next_set_btn": False,
+                "sets_data": [],
+                "show_error_expander": False,
+                "error_message": "",
+                "error_type": "error",
+                "confirm_prev": False,
+                "num_sets": 1,
+                "pending_delete_confirm": False,
+                "pending_delete_data": [],
+                "advanced_quesion": False,
+                "notifications": [],
+                "confirm_delete_open": False,
+                "confirm_delete_table":False,
+                "venn_fig":None
+                }
+                for key, val in defaults.items():
+                    st.session_state[key] = val
         with col2:
             if st.button("خط", use_container_width=True):
                 st.session_state["current_section"] = "lines"
@@ -766,6 +784,7 @@ class App:
         if section == "sets":
             self.body.empty()
             with self.body.container():
+                self.initialize_session_state()
                 self.sets_section()
         elif section == "lines":
             self.body.empty()
@@ -789,53 +808,38 @@ class App:
                 self.display_sets()
 
     def sets_section(self):
-        defaults = {
-            "disabled_advanced_btn": False,
-            "disabled_next_set_btn": False,
-            "sets_data": [],
-            "show_error_expander": False,
-            "error_message": "",
-            "error_type": "error",
-            "confirm_prev": False,
-            "pending_delete_confirm": False,
-            "pending_delete_data": [],
-            "advanced_quesion": False,
-            "notifications": [],
-            "confirm_delete_open": False,
-            "confirm_delete_table":False
-        }
-        for key, val in defaults.items():
-            st.session_state[key] = val
+
         st.markdown("<h1 style='color: #ff0000; text-align:center;'>مجموعه‌ها</h1>", unsafe_allow_html=True)
         st.toggle("حالت پیشرفته", key="show_advanced", on_change=self.on_advanced_toggle,
                   disabled=st.session_state["disabled_advanced_btn"])
         self.notification_placeholder = st.empty()
 
         with st.form(key="sets_form",  enter_to_submit=False):
-            self.name_set = st.text_input(f"نام مجموعه {st.session_state['num_sets']} را وارد کنید:", max_chars=1)
-            self.set_input = st.text_input(f"مجموعه {st.session_state['num_sets']} را وارد کنید:", key="set_input")
+            self.name_set = st.text_input(f"نام مجموعه {st.session_state['num_sets']} را وارد کنید:", max_chars=1,help="فقط از نام انگلسی و تک حرفی استفاده نماید")
+            self.set_input = st.text_input(f"مجموعه {st.session_state['num_sets']} را وارد کنید:", key="set_input",help="  تعداد اکلاد ها های باز و بسته برابر باشند و حتما مجموعه با اکلاد باز و بسته شود و در حال حاظر از مجموعه تهی پشتیبانی نمیشود")
             with st.container():
                 self.display_table()
             col1, col2, col3 = st.columns(3)
             next_btn = col1.form_submit_button("ثبت اطلاعات", use_container_width=True,
-                                            disabled=st.session_state["disabled_next_set_btn"])
-            prev_btn = col2.form_submit_button("مجموعه قبلی", use_container_width=True, on_click=self.previous_set)
-            end_btn = col3.form_submit_button("ثبت و پردازش مجموعه‌ها", use_container_width=True)
+                                            disabled=st.session_state["disabled_next_set_btn"],help="با این کار اطلاعات ورودی ها ثبت و  به صفحه مجموعه بعدی می روید")
+            prev_btn = col2.form_submit_button("مجموعه قبلی", use_container_width=True, on_click=self.previous_set,help="با این کار اطلعات مجموعه قبلی پاک و دوباره دریافت میشود")
+            end_btn = col3.form_submit_button("ثبت و پردازش مجموعه‌ها", use_container_width=True,help="با این کار اطلاعات مجموعه فعلی ثبت و به صفحه پردازش می روید")
         if next_btn:
             self.next_set()
         if end_btn:
-            if not self.check_sets_input():
+            if not self.check_sets_input(end=True):
                 pass
             else:
                 st.session_state["sets_data"].append({
                     "نام مجموعه": self.name_set.upper(),
                     "مقدار مجموعه": self.set_input
                 })
-
-                st.session_state["show_hr_sidebar"] = True
+                if not st.session_state["num_sets"]==1:
+                    st.session_state["show_hr_sidebar"] = True
+                st.session_state["calc_result"]="در انتظار دریافت عبارت"
                 st.session_state["current_section"] = "display_sets"  # یک مقدار جدید برای نمایش نتایج
                 st.rerun()
-        self.render_notification()
+        self.render_notification(self.notification_placeholder)
 
     def show_lines_section(self):
         st.markdown("<h1 style='color: #007bff; text-align:center;'>بخش خطوط</h1>", unsafe_allow_html=True)
@@ -853,7 +857,7 @@ class App:
         st.markdown("<h1 style='color: #ff00ff; text-align:center;'>نحوه استفاده</h1>", unsafe_allow_html=True)
         st.write("اینجا نحوه استفاده از برنامه توضیح داده می‌شود.")
     def next_set(self):
-        self._yes_no_erorr = False
+        self._yes_no_erorr = True
         if not self.check_sets_input():
             return
 
@@ -932,14 +936,6 @@ class App:
                                 pass
 
 
-    def confirm_previous_set(self):
-        self.render_notification(
-            "آیا از حذف مجموعه قبلی مطمئن هستید؟",
-            "error",
-            confirm=True,
-            yes_callback=lambda: (self.previous_set(), st.session_state.update({"confirm_prev": False})),
-            no_callback=lambda: st.session_state.update({"confirm_prev": False})
-        )
 
     def display_table(self):
         if st.session_state["sets_data"]:
@@ -957,7 +953,7 @@ class App:
                 hide_index=True
             )
 
-    def check_sets_input(self):
+    def check_sets_input(self,end=False):
         self.set_input = self.set_input.replace(" ", "")
         if not self.name_set:
             self.add_notification("نام مجموعه را وارد کنید!")
@@ -990,7 +986,8 @@ class App:
                 return False
         if st.session_state["num_sets"] != 3 and self.name_set.islower():
             self.old_name_set=self.name_set
-            self.add_notification("مجموعه به صورت کوچک نوشته شده است. به صورت خودکار به بزرگ تبدیل می‌شود.", "info")
+            if not end:
+                self.add_notification("مجموعه به صورت کوچک نوشته شده است. به صورت خودکار به بزرگ تبدیل می‌شود.", "info")
             self.name_set = self.name_set.strip().upper()
             return True
         self._yes_no_erorr=True
@@ -1003,13 +1000,18 @@ class App:
             st.session_state["disabled_next_set_btn"] = True
 
     def display_sets(self):
-
+        st.toggle("حالت پیشرفته", key="show_advanced",disabled=True)
+        self.notification_frame=st.empty()
+        st.divider()
         set_of_sets={}
         for dic in st.session_state["sets_data"]:
             set_of_sets[dic["نام مجموعه"]] = eval(SetsAlgorithm.parse_set_string(SetsAlgorithm.fix_set_variables(str(dic["مقدار مجموعه"]))), {"__builtins__": {}, "frozenset": frozenset})
-        sets=SetsAlgorithm(set_of_sets)
-        menu_options = list(set_of_sets.keys()) + ["اطلاعات دیگر", "محاسبات"]
-        self.selected_option = self.more_opition.selectbox("انتخاب مجموعه یا بخش", menu_options)
+            if  st.session_state["num_sets"]==1:
+                self.selected_option=dic["نام مجموعه"]
+        self.sets=SetsAlgorithm(set_of_sets)
+        menu_options = list(set_of_sets.keys()) + ["محاسبات"]
+        if not st.session_state["num_sets"]==1:
+            self.selected_option = self.more_opition.selectbox("انتخاب مجموعه یا بخش", menu_options)
         if self.selected_option in set_of_sets:
             selected_set=set_of_sets[self.selected_option]
             transformed = SetsAlgorithm.parse_set_string(SetsAlgorithm.fix_set_variables(str(selected_set)))
@@ -1047,6 +1049,107 @@ class App:
             })
             with col2.expander("افراز ها"):
                 st.dataframe(df_part,hide_index=True,use_container_width=True)
+            if st.session_state["num_sets"]==1 and  st.session_state["show_advanced"]:
+                with st.expander("محاسبه",expanded=True):
+                    with st.form("clac_form",enter_to_submit=False):
+                        self.calc_input=st.text_input("عبارت مورد نظر را وارد کنید",key="calc_input",help="شما میتوانید از نام مجموعه ها برای مختصر نویسی استفاده کنید اگر نام دیگری استفاده کنید با ارور مواجه خواید شد و برای اشتراک از & و برای اجتماع از | استفاده کنید")
+                        col2,col1=st.columns(2)
+                        submit_btn=col1.form_submit_button("محاسبه جواب",help="با زدن این دکمه جواب عبارت برای شما محاسبه می شود")
+                        col2.write(f"<div style='display: flex;justify-content: center;'>{st.session_state["calc_result"]}</div>",unsafe_allow_html=True)
+                    if submit_btn:
+                        self.calc_sets()
+                
+        elif self.selected_option == "محاسبات":
+            info = self.sets.check_other_information()   
+            st.subheader("بررسی زنجیره‌ای بودن مجموعه‌ها")
+            if info["all_sets_chain"]:
+                st.success("همه مجموعه‌ها به صورت زنجیره‌ای مرتب هستند.")
+            else:
+                st.warning("مجموعه‌ها به صورت زنجیره‌ای مرتب نیستند.")
+            with st.expander("بررسی نسبت مجموعه ها با هم دیگر"):             
+                df_subsets_info = pd.DataFrame(info["subsets_info"]).T
+                df_subsets_info.index = [name.replace("Set", "مجموعه").replace("set", "مجموعه") for name in df_subsets_info.index]
+                df_subsets_info.columns = [col.replace("Set", "مجموعه").replace("set", "مجموعه") for col in df_subsets_info.columns]
 
+                # اضافه کردن نام مجموعه‌های ردیف به یک ستون جدید به نام "مجموعه ردیف" و حذف index
+                df_subsets_info.insert(0, "نام زیر مجموعه", df_subsets_info.index)
+                df_subsets_info = df_subsets_info.reset_index(drop=True)
+
+                # پردازش سلول‌ها:
+                # - اگر مقدار True باشد: "✓"
+                # - اگر مقدار False باشد: "✗"
+                # - اگر ردیف و ستون یکسان باشند: "--"
+                for i in range(len(df_subsets_info)):
+                    for col in df_subsets_info.columns[1:]:  # از ستون دوم به بعد پردازش شود
+                        if df_subsets_info.at[i, "نام زیر مجموعه"] == col:
+                            df_subsets_info.at[i, col] = "---"
+                        else:
+                            if df_subsets_info.at[i, col]:
+                                df_subsets_info.at[i, col] = "✓"
+                            else:
+                                df_subsets_info.at[i, col] = "✗"
+
+                # نمایش جدول با تنظیمات بهتر
+                st.dataframe(df_subsets_info, hide_index=True)
+
+                # نمایش توضیح جداگانه در زیر جدول
+                st.info(
+                    "در جدول بالا:\n"
+                    "✓ : نشان‌دهنده‌ی زیرمجموعه بودن مجموعه موجود در ردیف نسبت به مجموعه موجود در ستون است.\n"
+                    "✗ : نشان‌دهنده‌ی عدم زیرمجموعه بودن است.\n"
+                    "-- : همان مجموعه مورد نظر است"
+                )
+            st.divider()
+            with st.expander("نمودار ون"):
+                st.subheader("اطلاعات نواحی نمودار")
+                region_info = self.sets.get_region_info()
+                if region_info:
+                    df_region = pd.DataFrame({
+                        "ناحیه": list(region_info.keys()),
+                        "مقدار": [SetsAlgorithm.set_to_str(v) for v in region_info.values()]
+                    })
+                    st.dataframe(df_region, hide_index=True)
+                else:
+                    st.info("هیچ ناحیه‌ای یافت نشد.")
+                
+                # دکمه رسم نمودار
+                if st.button("رسم نمودار ون", key="venn_btn", use_container_width=True,help="با زدن این دکمه نمودار ون مجموعه ها رسم می شود"):
+                    if st.session_state["show_advanced"] and len(set_of_sets)>3:
+                        st.session_state.venn_fig = self.sets.draw_venn_4_more()
+                    else:
+                        st.session_state.venn_fig = self.sets.draw_venn()
+                save_venn_btn_frame=st.empty()
+                # نمایش نمودار اگر قبلاً ساخته شده باشد
+                if not st.session_state["venn_fig"] is None :
+                    st.pyplot(st.session_state.venn_fig, clear_figure=False)
+                    
+                    # ایجاد دکمه دانلود
+                    buffer = BytesIO()
+                    st.session_state.venn_fig.savefig(buffer, format="png")
+                    buffer.seek(0)
+                    save_venn_btn_frame.download_button(
+                        label="دانلود نمودار ون",
+                        data=buffer,
+                        file_name="venn_diagram.png",
+                        mime="image/png",
+                        use_container_width=True,
+                        help="با زدن این دکمه نمودار ون برای شما دانلود میشود"
+                    )
+
+            if  st.session_state["show_advanced"]:
+                with st.expander("محاسبه",expanded=True):
+                    with st.form("clac_form",enter_to_submit=False):
+                        self.calc_input=st.text_input("عبارت مورد نظر را وارد کنید",key="calc_input",help="شما میتوانید از نام مجموعه ها برای مختصر نویسی استفاده کنید اگر نام دیگری استفاده کنید با ارور مواجه خواید شد و برای اشتراک از & و برای اجتماع از | استفاده کنید")
+                        col2,col1=st.columns(2)
+                        submit_btn=col1.form_submit_button("محاسبه جواب",help="با زدن این دکمه جواب عبارت برای شما محاسبه می شود")
+                        col2.write(f"<div style='display: flex;justify-content: center;'>{st.session_state["calc_result"]}</div>",unsafe_allow_html=True)
+                    if submit_btn:
+                        self.calc_sets()
+                
+    def calc_sets(self):
+        fixed_set = SetsAlgorithm.fix_set_variables(str(self.calc_input))
+        result = self.sets.U_I_Ms_advance(fixed_set)
+        st.session_state["calc_result"] = result
+        st.rerun()
 if __name__ == "__main__":
     App()
