@@ -915,7 +915,7 @@ class App:
 
 
     def main_menu(self):
-        st.sidebar.markdown("<h1 style='color: #ff0000; text-align:center;'>مجموعه‌ها</h1>", unsafe_allow_html=True)
+        st.sidebar.markdown("<h1 style='color: #ff0000; text-align:center;'>منو اصلی</h1>", unsafe_allow_html=True)
         col1, col2 = st.sidebar.columns([1, 1])
 
 
