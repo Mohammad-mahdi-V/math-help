@@ -33,7 +33,6 @@ from io import BytesIO
 
 
 # --------------------------------------------------
-# کلاس SetsAlgorithm (بدون تغییر عمده)
 class SetsAlgorithm:
     
     def __init__(self, set_of_sets):
@@ -126,7 +125,8 @@ class SetsAlgorithm:
     def fix_set_variables(expression: str) -> str:
         """
         تبدیل متغیرهای غیرعددی داخل مجموعه‌ها و زیرمجموعه‌ها به رشته،
-        به‌طوری که اگر یک عنصر قبلاً در کوتیشن قرار نگرفته باشد، آن را در کوتیشن قرار می‌دهد.
+        به‌طوری که اگر یک عنصر در عمق ۱ قرار داشته باشد و قبلاً در کوتیشن نباشد،
+        آن را در کوتیشن قرار می‌دهد.
         """
         result = []
         token = ""
@@ -156,7 +156,9 @@ class SetsAlgorithm:
                 # قبل از اضافه کردن آکولاد، توکن جاری را پردازش می‌کنیم
                 if token:
                     fixed_token = token.strip()
-                    if brace_level > 0 and fixed_token and not fixed_token.isdigit() and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
+                    if fixed_token.isdigit():
+                        fixed_token = str(int(fixed_token))
+                    elif brace_level == 1 and fixed_token and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
                         fixed_token = f'"{fixed_token}"'
                     result.append(fixed_token)
                     token = ""
@@ -169,7 +171,9 @@ class SetsAlgorithm:
             elif ch == '}':
                 if token:
                     fixed_token = token.strip()
-                    if brace_level > 0 and fixed_token and not fixed_token.isdigit() and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
+                    if fixed_token.isdigit():
+                        fixed_token = str(int(fixed_token))
+                    elif brace_level == 1 and fixed_token and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
                         fixed_token = f'"{fixed_token}"'
                     result.append(fixed_token)
                     token = ""
@@ -182,11 +186,19 @@ class SetsAlgorithm:
             elif ch == ',' or ch in "|&-()":
                 if token:
                     fixed_token = token.strip()
-                    if brace_level > 0 and fixed_token and not fixed_token.isdigit() and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
+                    if fixed_token.isdigit():
+                        fixed_token = str(int(fixed_token))
+                    elif brace_level == 1 and fixed_token and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
                         fixed_token = f'"{fixed_token}"'
                     result.append(fixed_token)
                     token = ""
-                result.append(ch)
+                else:
+                    # اگر توکن خالی است و کاراکتر مورد نظر غیر از کاما است و در عمق ۱ قرار دارد،
+                    # آن را به عنوان یک عنصر (رشته) در کوتیشن قرار می‌دهیم.
+                    if ch != ',' and brace_level == 1:
+                        result.append(f'"{ch}"')
+                    else:
+                        result.append(ch)
                 i += 1
                 continue
 
@@ -198,12 +210,13 @@ class SetsAlgorithm:
         # پردازش توکن باقی‌مانده در انتها
         if token:
             fixed_token = token.strip()
-            if brace_level > 0 and fixed_token and not fixed_token.isdigit() and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
+            if fixed_token.isdigit():
+                fixed_token = str(int(fixed_token))
+            elif brace_level == 1 and fixed_token and not (fixed_token.startswith('"') and fixed_token.endswith('"')):
                 fixed_token = f'"{fixed_token}"'
             result.append(fixed_token)
-            
+                
         return "".join(result)
-
 
     @staticmethod
     def to_frozenset(obj):
@@ -326,25 +339,79 @@ class SetsAlgorithm:
 
 
 
-    def U_I_Ms_advance(self, text):
-        # جایگزینی علائم ∩ و ∪ با معادل‌های Python
+    def check_variable_depths(self, expression: str) -> dict:
+        """
+        بررسی عمق هر متغیر در عبارت.
+        متغیرهایی که در بخش‌های کوتیشن قرار دارند، نادیده گرفته می‌شوند.
+        این تابع یک دیکشنری برمی‌گرداند که کلید آن نام متغیر و مقدار آن لیستی از عمق‌های حضور آن در عبارت است.
+        """
+        depths = {}
+        current_depth = 0
+        i = 0
+        while i < len(expression):
+            ch = expression[i]
+            if ch == '"':
+                # گذر از بخش‌های کوتیشن‌دار
+                i += 1
+                while i < len(expression) and expression[i] != '"':
+                    i += 1
+                i += 1  # گذر از کوتیشن پایانی
+                continue
+            elif ch == '{':
+                current_depth += 1
+                i += 1
+                continue
+            elif ch == '}':
+                current_depth -= 1
+                i += 1
+                continue
+            elif ch.isalpha() or ch == '_':
+                start = i
+                while i < len(expression) and (expression[i].isalnum() or expression[i] == '_'):
+                    i += 1
+                token = expression[start:i]
+                # ثبت عمق متغیر
+                if token not in depths:
+                    depths[token] = []
+                depths[token].append(current_depth)
+                continue
+            else:
+                i += 1
+        return depths
+
+    def U_I_Ms_advance(self, text: str) -> str:
+        """
+        محاسبه ادونس با بررسی عمق متغیرهای موجود در عبارت.
+        در این تابع:
+        - ابتدا علائم ∩ و ∪ به معادل‌های Python تبدیل می‌شوند.
+        - متغیرهای داخل مجموعه‌ها با استفاده از fix_set_variables اصلاح می‌شوند.
+        - عمق هر متغیر در عبارت محاسبه می‌شود. اگر متغیری یا در هیچ عمقی (یعنی خارج از {}) ظاهر شده باشد یا تعریف نشده باشد، خطا داده می‌شود.
+        - در نهایت عبارت پردازش و نتیجه بازگردانده می‌شود.
+        """
+        # جایگزینی علائم ∩ و ∪
         text = text.replace('∩', '&').replace('∪', '|')
-
+        
         # اصلاح متغیرهای داخل مجموعه‌ها
-        text = SetsAlgorithm.fix_set_variables(text)
-
-        # استخراج قسمت‌هایی که خارج از {} هستند
-        outside_braces = re.split(r'\{[^{}]*\}', text)
-        found_vars = re.findall(r'\b[A-Za-z_][A-Za-z0-9_]*\b', " ".join(outside_braces))
-        # بررسی متغیرهای خارج از {} در self.set_of_sets
-        for var in found_vars:
+        fixed_text = SetsAlgorithm.fix_set_variables(text)
+        
+        # بررسی عمق متغیرها
+        var_depths = self.check_variable_depths(fixed_text)
+        for var, depths in var_depths.items():
+            # اگر متغیر تعریف نشده باشد
             if var.upper() not in self.set_of_sets:
                 return f"متغیر '{var}' تعریف نشده است!"
-
-        transformed_text = SetsAlgorithm.parse_set_string(text)
+            # اگر متغیر تنها در عمق 0 (خارج از مجموعه‌ها) ظاهر شده باشد
+            if all(d == 0 for d in depths):
+                if var.upper() not in self.set_of_sets:
+                    return f"متغیر '{var}' تعریف نشده است!"
+        
+        # تبدیل عبارت به فرمت مناسب برای eval
+        transformed_text = SetsAlgorithm.parse_set_string(fixed_text)
+        
+        # آماده‌سازی دیکشنری متغیرها (با توجه به اینکه ممکن است نام‌ها به حروف کوچک نیز مورد استفاده قرار گیرند)
         variables = {name: frozenset(set_val) for name, set_val in self.set_of_sets.items()}
         variables.update({name.lower(): frozenset(set_val) for name, set_val in self.set_of_sets.items()})
-
+        
         try:
             result = eval(transformed_text, {"__builtins__": {}, "frozenset": frozenset}, variables)
             return self.set_to_str(result)
@@ -535,32 +602,110 @@ class App:
             page_icon="",
             initial_sidebar_state="expanded"
         )
-        with open("data/font/FarhangVariable.woff", "rb") as f:
-            encoded_font = base64.b64encode(f.read()).decode("utf-8")
+        with open("data/img/bg.png", "rb") as f:
+            bg = base64.b64encode(f.read()).decode("utf-8")
+        with open("data/font/YekanBakhFaNum-Fat.woff2", "rb") as f:
+            yekan_fat = base64.b64encode(f.read()).decode("utf-8")
+        with open("data/font/YekanBakhFaNum-Bold.woff2", "rb") as f:
+            yekan_bold = base64.b64encode(f.read()).decode("utf-8")
+        with open("data/font/YekanBakhFaNum-Heavy.woff2", "rb") as f:
+            yekan_heavy = base64.b64encode(f.read()).decode("utf-8")
+        with open("data/font/YekanBakhFaNum-Light.woff2", "rb") as f:
+            yekan_light = base64.b64encode(f.read()).decode("utf-8")
+        with open("data/font/YekanBakhFaNum-Medium.woff2", "rb") as f:
+            yekan_medium = base64.b64encode(f.read()).decode("utf-8")
+        with open("data/font/YekanBakhFaNum-Regular.woff2", "rb") as f:
+            yekan_regular = base64.b64encode(f.read()).decode("utf-8")
+
+        st.markdown(f"""
+        <style>
+        @font-face {{
+            font-family: 'YekanBakhFaNum';
+            src: url(data:font/woff2;base64,{yekan_fat}) format('woff2');
+            font-weight: 900;
+            font-style: normal;
+        }}
+        @font-face {{
+            font-family: 'YekanBakhFaNum';
+            src: url(data:font/woff2;base64,{yekan_bold}) format('woff2');
+            font-weight: bold;
+            font-style: normal;
+        }}
+        @font-face {{
+            font-family: 'YekanBakhFaNum';
+            src: url(data:font/woff2;base64,{yekan_heavy}) format('woff2');
+            font-weight: 800;
+            font-style: normal;
+        }}
+        @font-face {{
+            font-family: 'YekanBakhFaNum';
+            src: url(data:font/woff2;base64,{yekan_light}) format('woff2');
+            font-weight: 300;
+            font-style: normal;
+        }}
+        @font-face {{
+            font-family: 'YekanBakhFaNum';
+            src: url(data:font/woff2;base64,{yekan_medium}) format('woff2');
+            font-weight: 500;
+            font-style: normal;
+        }}
+        @font-face {{
+            font-family: 'YekanBakhFaNum';
+            src: url(data:font/woff2;base64,{yekan_regular}) format('woff2');
+            font-weight: normal;
+            font-style: normal;
+        }}
+
+
+        </style>
+        """, unsafe_allow_html=True)
         st.markdown(
             f"""
             <style>
-            @font-face {{
-                font-family: 'Farhang';
-                src: url(data:font/woff;base64,{encoded_font}) format('woff');
-                font-display: fallback;
-            }}
-            
-            .st-emotion-cache-1p9ibxm h1, .st-emotion-cache-1p9ibxm h2, .st-emotion-cache-1p9ibxm h3, 
-            .st-emotion-cache-1p9ibxm h4, .st-emotion-cache-1p9ibxm h5, .st-emotion-cache-1p9ibxm h6, 
-            .st-emotion-cache-1p9ibxm span {{
-                font-family:"Farhang";
-                font-weight:200;
-            }}
-            .st-emotion-cache-3gzemd h1, .st-emotion-cache-3gzemd h2, .st-emotion-cache-3gzemd h3, 
-            .st-emotion-cache-3gzemd h4, .st-emotion-cache-3gzemd h5, .st-emotion-cache-3gzemd h6 {{
-                font-family:"Farhang";
-                font-weight:200;
-            }}
             html, body, [class*="st-"] {{
-                font-family: 'Farhang' !important;
+            font-family: 'YekanBakhFaNum'!important;\
                 font-size:22px !important;
             }}
+            .stApp::before {{
+                content: "";
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: url('data:image/png;base64,{bg}') no-repeat center center;
+                background-size: cover;
+                filter: blur(4px); 
+            }}
+            .stSidebar::before {{
+                content: "";
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: url('data:image/png;base64,{bg}') no-repeat center center;
+                background-size: cover;
+                filter: blur(3px);
+                z-index: -1;       
+            }}
+            .stExpander{{
+                border-radius: 40px;
+                background-color: #ffffffcc;
+            }}  
+            .stForm {{
+            border-radius: 40px;
+            background-color: #ffffffcc;
+            }}
+            .stExpander details{{
+                border-radius: 40px;
+            }}
+            h1,h2,h3,h4,h5,h6,span
+             {{
+                font-family:'YekanBakhFaNum' !important;
+                font-weight:300 !important;
+            }}
+
 
             .stMain {{
                 direction: rtl !important;
@@ -618,15 +763,15 @@ class App:
             }}
             div.stButton > button p {{
                 font-size: 19px !important;
-                font-weight: 200 !important;
+                font-weight: 300 !important;
             }}
             div.stButton > button p ,[data-testid="stBaseButton-secondary"] p {{
                 font-size: 19px !important;
-                font-weight: 200 !important;
+                font-weight: 300 !important;
             }}
             [kind="secondaryFormSubmit"] p {{
                 font-size: 19px !important;
-                font-weight: 200 !important;
+                font-weight: 300 !important;
             }}
             .dataframe th {{
                 font-size: 18px !important;
@@ -638,6 +783,32 @@ class App:
             .st-emotion-cache-1czn7q6 {{
                 display: none !important;
             }}
+            section[data-testid="stSidebar"] {{
+                position: fixed !important;  /* ثابت روی صفحه */
+                top: 0;
+                left: 0;
+                height: 100%;
+                width: 300px; /* یا هر عرض مناسب */
+                overflow-y: auto !important; /* اسکرول عمودی فعال */
+                box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+                visibility: visible; 
+            }}
+
+            section[data-testid="stSidebar"] > div {{
+                overflow-y: auto !important;
+                max-height: 100vh !important;
+            }}
+            [data-testid="stSidebarCollapseButton"]{{
+                display: inline-flex !important;
+            }}
+            @media (min-width: 1231px) {{
+                section[data-testid="stSidebar"] {{
+                    position: relative !important;
+                    visibility:visible;
+
+                }}
+            }}
+
             .st-emotion-cache-1wqrzgl {{
                 min-width: 400px !important;
             }}
@@ -649,16 +820,25 @@ class App:
                     min-width:100px
                 }}
             }}
+            @media (min-width:460px){{
+                .stApp::before {{
+                filter: blur(5px); 
+                }}
+            }}
+                
             div.stButton > button:hover ,[data-testid="stBaseButton-secondary"]:hover{{
                 background: rgb(17, 72, 151) !important;
                 transform: scale(1.05) !important;
+            }}
+            .stSidebar[aria-expanded="true"] {{
+                visibility:visible;
             }}
             [kind="secondaryFormSubmit"]:hover {{
                 background: rgb(17, 72, 151) !important;
                 transform: scale(1.05) !important;
             }}
             [data-baseweb="input"] {{
-                font-family: 'Farhang', sans-serif !important;
+                font-family: 'YekanBakhFaNum'!important;
                 height: max-content !important;
                 direction: ltr !important;
             }}
@@ -684,6 +864,7 @@ class App:
             """, unsafe_allow_html=True
         )
 
+
     def initialize_session_state(self):
         defaults = {
             "current_section": "sets",
@@ -704,7 +885,8 @@ class App:
             "confirm_delete_open": False,
             "confirm_delete_table":False,
             "calc_result":"در انتظار عبارت",
-            "venn_fig":None
+            "venn_fig":None,
+            "hide_sets_btn":True
         }
         for key, val in defaults.items():
             if key not in st.session_state:
@@ -735,11 +917,15 @@ class App:
     def main_menu(self):
         st.sidebar.markdown("<h1 style='color: #ff0000; text-align:center;'>مجموعه‌ها</h1>", unsafe_allow_html=True)
         col1, col2 = st.sidebar.columns([1, 1])
+
+
+
         with col1:
             if st.button("مجموعه‌ها", use_container_width=True):
                 st.session_state["current_section"] = "sets"
                 st.session_state["show_hr_sidebar"] = False
                 defaults = {
+                "show_advanced": False,
                 "disabled_advanced_btn": False,
                 "disabled_next_set_btn": False,
                 "sets_data": [],
@@ -754,7 +940,9 @@ class App:
                 "notifications": [],
                 "confirm_delete_open": False,
                 "confirm_delete_table":False,
-                "venn_fig":None
+                "venn_fig":None,
+                "hide_sets_btn":True
+
                 }
                 for key, val in defaults.items():
                     st.session_state[key] = val
@@ -819,14 +1007,15 @@ class App:
             self.set_input = st.text_input(f"مجموعه {st.session_state['num_sets']} را وارد کنید:", key="set_input",help="  تعداد اکلاد ها های باز و بسته برابر باشند و حتما مجموعه با اکلاد باز و بسته شود و در حال حاظر از مجموعه تهی پشتیبانی نمیشود")
             with st.container():
                 self.display_table()
-            col1, col2, col3 = st.columns(3)
+            col1, col2,  = st.columns(2)
             next_btn = col1.form_submit_button("ثبت اطلاعات", use_container_width=True,
                                             disabled=st.session_state["disabled_next_set_btn"],help="با این کار اطلاعات ورودی ها ثبت و  به صفحه مجموعه بعدی می روید")
-            prev_btn = col2.form_submit_button("مجموعه قبلی", use_container_width=True, on_click=self.previous_set,help="با این کار اطلعات مجموعه قبلی پاک و دوباره دریافت میشود")
-            end_btn = col3.form_submit_button("ثبت و پردازش مجموعه‌ها", use_container_width=True,help="با این کار اطلاعات مجموعه فعلی ثبت و به صفحه پردازش می روید")
+            end_btn = col2.form_submit_button("پردازش مجموعه ها های وارد شد",use_container_width=True,help="با این کار مجموعه هایی که تا الان وارد کردید پردازش میشود",disabled=st.session_state["hide_sets_btn"])
+            prev_btn =col2.form_submit_button("مجموعه قبلی", use_container_width=True, on_click=self.previous_set,help="با این کار اطلعات مجموعه قبلی پاک و دوباره دریافت میشود",disabled=st.session_state["hide_sets_btn"])
+            reg_end_btn =col1.form_submit_button(f"ثبت مجموعه {st.session_state["num_sets"]} و پردازش مجموعه‌ها", use_container_width=True,help="با این کار اطلاعات مجموعه فعلی ثبت و به صفحه پردازش می روید")
         if next_btn:
             self.next_set()
-        if end_btn:
+        if reg_end_btn:
             if not self.check_sets_input(end=True):
                 pass
             else:
@@ -839,6 +1028,12 @@ class App:
                 st.session_state["calc_result"]="در انتظار دریافت عبارت"
                 st.session_state["current_section"] = "display_sets"  # یک مقدار جدید برای نمایش نتایج
                 st.rerun()
+        if end_btn:
+            if not st.session_state["num_sets"]==1:
+                st.session_state["show_hr_sidebar"] = True
+            st.session_state["calc_result"]="در انتظار دریافت عبارت"
+            st.session_state["current_section"] = "display_sets"  # یک مقدار جدید برای نمایش نتایج
+            st.rerun()
         self.render_notification(self.notification_placeholder)
 
     def show_lines_section(self):
@@ -910,6 +1105,7 @@ class App:
             "نام مجموعه": self.name_set.upper(),
             "مقدار مجموعه": self.set_input
         })
+        st.session_state["hide_sets_btn"]=False
         st.session_state["num_sets"] += 1
         if self._yes_no_erorr:
             st.rerun()
@@ -927,6 +1123,8 @@ class App:
                                 st.session_state["disabled_next_set_btn"] = False
                                 if st.session_state["num_sets"] < 4:
                                     st.session_state["disabled_advanced_btn"] = False
+                                if st.session_state["num_sets"]==1:
+                                    st.session_state["hide_sets_btn"]=True
                             if st.button("بله", key="confirm_yes", use_container_width=True, on_click=confirm_delete):
                                 pass
                         with col2:
