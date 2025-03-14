@@ -1107,6 +1107,21 @@ class App:
             span.katex-html {{
                 direction: ltr;
             }}
+            .katex-display {{
+                display: block;
+                position: relative;
+                word-wrap: break-word;
+                overflow-x: auto;
+                max-width: 100%;
+                text-align: center;
+                white-space: normal;  /* متن را مجاز به شکستن کند */
+            }}
+
+            .katex {{
+                display: inline-block !important; /* اطمینان از اینکه KaTeX قابل شکستن باشد */
+                word-break: break-word;  /* اجازه شکستن کلمات */
+                overflow-wrap: break-word; /* کمک به شکستن کلمات */
+            }}
             </style>
             """, unsafe_allow_html=True
         )
@@ -1254,50 +1269,66 @@ class App:
         import streamlit as st
         import re
 
-            # تابع بهبودیافته برای جدا کردن لاتکس و متن
+        def is_line_math(line):
+            line = line.strip()
+            if not line:
+                return False
+            if re.search(r'(=|\\frac|\\int|\\sum|\^|_)', line):
+                return True
+            if len(line.split()) == 1 and re.match(r'^[A-Za-z0-9+\-*/^_]+$', line):
+                return True
+            return False
+
         def split_latex_and_text(text):
-            # الگوی بهبودیافته برای تشخیص لاتکس
-            pattern = r'(\$\$(?:[^$]|\$(?!\$))*?\$\$|\$(?:[^$]|\$(?!\$))*?\$)'
+            pattern = r'(\\begin\{[^\}]+\}.*?\\end\{[^\}]+\}|(?:\$\$(?:[^$]|\$(?!\$))*?\$\$|\$(?:[^$]|\$(?!\$))*?\$|\\\((?:[^\\\)]|\\(?!\)))*?\\\)|\\\[(?:[^\\\]]|\\(?!\]))*?\\\]))'
             parts = []
             last_end = 0
-            
-            for match in re.finditer(pattern, text):
+
+            for match in re.finditer(pattern, text, re.DOTALL):
                 start, end = match.span()
-                # متن معمولی قبل از فرمول لاتکس
                 if last_end < start:
                     parts.append((text[last_end:start], False))
-                
-                # محتوای لاتکس (بدون $ یا $$ در ابتدا و انتها)
                 latex_content = match.group(0)
-                if latex_content.startswith('$$') and latex_content.endswith('$$'):
-                    latex_content = latex_content[2:-2]
-                elif latex_content.startswith('$') and latex_content.endswith('$'):
-                    latex_content = latex_content[1:-1]
-                
+                if latex_content.startswith(r'\begin'):
+                    pass
+                else:
+                    if latex_content.startswith('$$') and latex_content.endswith('$$'):
+                        latex_content = latex_content[2:-2]
+                    elif latex_content.startswith('$') and latex_content.endswith('$'):
+                        latex_content = latex_content[1:-1]
+                    elif latex_content.startswith(r'\(') and latex_content.endswith(r'\)'):
+                        latex_content = latex_content[2:-2]
+                    elif latex_content.startswith(r'\[') and latex_content.endswith(r'\]'):
+                        latex_content = latex_content[2:-2]
                 parts.append((latex_content, True))
                 last_end = end
-            
-            # اضافه کردن متن باقی‌مانده بعد از آخرین فرمول
+
             if last_end < len(text):
                 parts.append((text[last_end:], False))
-            
-            # اگر هیچ فرمولی پیدا نشد، کل متن را به‌عنوان متن معمولی برگردان
             if not parts:
                 parts.append((text, False))
             
-            return parts
+            new_parts = []
+            for part, is_latex in parts:
+                if not is_latex:
+                    lines = part.splitlines(keepends=True)
+                    for line in lines:
+                        if is_line_math(line):
+                            new_parts.append((line, True))
+                        else:
+                            new_parts.append((line, False))
+                else:
+                    new_parts.append((part, True))
+            return new_parts
 
-        # تابع برای نمایش پیام‌ها
         def display_message(text, container=None):
             if container is None:
                 return
             parts = split_latex_and_text(text)
             for part, is_latex in parts:
                 if is_latex:
-                    try:
-                        container.latex(part)
-                    except Exception as e:
-                        container.error(f"خطا در پردازش لاتکس: {part} - {str(e)}")
+                    container.latex(part)
+
                 else:
                     accumulated_text = ""
                     temp_container = container.empty()
@@ -1306,8 +1337,8 @@ class App:
                         temp_container.markdown(accumulated_text, unsafe_allow_html=True)
                         time.sleep(0.08)
 
-        # تنظیمات اولیه با پیام سیستم
-        if st.session_state["message"] ==[]:
+        # تنظیمات اولیه پیام سیستم
+        if st.session_state["message"] == []:
             st.session_state["message"] = [{
                 'role': "پیام سیستم",
                 'content': "این پیام از طرف سیستم است :  <br> شما نمیتوانید از مباحث غیر از ریاضی و فیزیک سوال بپرسید "
@@ -1418,6 +1449,7 @@ class App:
                     st.session_state["message"] = []
                     st.session_state["displayed_messages"] = 0
                     st.rerun()
+
     def sets_section(self):
         with st.container(key="title_sets"):
             st.markdown("<h1 style='color: #ff0000; text-align:center;'>مجموعه‌ها</h1>", unsafe_allow_html=True)
