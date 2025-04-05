@@ -42,12 +42,23 @@ class Benchmark:
 
 
     def power_set(self, s):
-        for r in range(len(s) + 1):
-            for subset in combinations(s, r):
-                yield subset
+        subsets_dict = {f"زیرمجموعه {i} عضوی": [] for i in range(len(s)+1)}
+        num_loop = 0
+        for i in range(len(s) + 1):
+            for subset in combinations(s, i):
+                subset_str = "{" + ", ".join(map(str, subset)) + "}"
+                subsets_dict[f"زیرمجموعه {i} عضوی"].append(subset_str)
+            num_loop += 1
+        return subsets_dict
 
     def partitions(self, s):
-        return list(set_partitions(s))
+        partition_list = []
+        partition_loop = 0
+        for partition in set_partitions(s):
+            partition_list.append(partition)
+            partition_loop += 1
+
+        return partition_list
 
     def benchmark_power_set(self):
         max_n_subsets = 0
@@ -55,7 +66,7 @@ class Benchmark:
             n = max_n_subsets + 1
             elements = list(range(1, n + 1))
             start_time = time.time()
-            subsets = list(self.power_set(elements))
+            subsets = self.power_set(elements)
             end_time = time.time()
             duration = end_time - start_time
             print(f"[Power Set] n = {n} | تعداد زیرمجموعه‌ها: {len(subsets):,} | زمان اجرا: {duration:.6f} ثانیه")
@@ -66,6 +77,7 @@ class Benchmark:
 
     def benchmark_partitions(self):
         max_n_partitions = 0
+        
         while True:
             n = max_n_partitions + 1
             elements = list(range(1, n + 1))
@@ -73,16 +85,20 @@ class Benchmark:
             partitions = self.partitions(elements)
             end_time = time.time()
             duration = end_time - start_time
+
             print(f"[Partitions] n = {n} | تعداد افرازها: {len(partitions):,} | زمان اجرا: {duration:.6f} ثانیه")
             if duration > 1.0:
                 break
             max_n_partitions = n
+
+        self.max_bell=len(partitions)
         self.max_n_partitions = max_n_partitions
 
     def save_results_pickle(self):
         data = {
             "max_n_subsets": self.max_n_subsets,
-            "max_n_partitions": self.max_n_partitions
+            "max_n_partitions": self.max_n_partitions,
+            "max_bell":self.max_bell
         }
         file_path = os.path.join(self.output_dir, self.BENCHMARK_FILE)
         with open(file_path, "wb") as f:
@@ -112,7 +128,6 @@ class Benchmark:
 
         t1.join()
         t2.join()
-
     def execute(self):
         benchmark_data = self.load_results_pickle()
         if benchmark_data is None:
@@ -121,7 +136,8 @@ class Benchmark:
         else:
             self.max_n_subsets = benchmark_data["max_n_subsets"]
             self.max_n_partitions = benchmark_data["max_n_partitions"]
-
+            self.max_bell=benchmark_data["max_bell"]
+        print(f"✅ نتایج بنچمارک بارگذاری شدند: max_n_subsets = {self.max_n_subsets}, max_n_partitions = {self.max_n_partitions}")
 # --------------------------------------------------
 class SetsAlgorithm:
     
@@ -411,40 +427,36 @@ class SetsAlgorithm:
     @staticmethod
     def subsets_one_set(given_set):
         """
-        محاسبه زیرمجموعه‌های یک مجموعه.
-        - در صورت طول مجموعه بزرگتر از 10، فقط 10 دسته زیرمجموعه را محاسبه می‌کند.
+        محاسبه زیرمجموعه‌های یک مجموعه با محدودیت benchmark.max_n_subsets.
         """
-        num_loop = 0
         if not isinstance(given_set, str):
             given_set = repr(given_set)
         given_set = eval(given_set)
-        if len(given_set) > benchmark.max_n_subsets:
-            subsets_dict = {f"زیرمجموعه {i} عضوی": [] for i in range(11)}
-        else:
-            subsets_dict = {f"زیرمجموعه {i} عضوی": [] for i in range(len(given_set)+1)}
-        for i in range(len(given_set) + 1):
-            if num_loop > benchmark.max_n_subsets:
-                break
+        
+        # تعیین حداکثر تعداد اعضا برای زیرمجموعه‌ها
+        max_size = min(len(given_set), 10) + 1
+        
+        # ایجاد دیکشنری برای زیرمجموعه‌ها
+        subsets_dict = {f"زیرمجموعه {i} عضوی": [] for i in range(max_size)}
+        
+        # محاسبه زیرمجموعه‌ها فقط تا max_size
+        for i in range(max_size):
             for subset in combinations(given_set, i):
                 subset_str = "{" + ", ".join(map(str, subset)) + "}"
                 subsets_dict[f"زیرمجموعه {i} عضوی"].append(subset_str)
-            num_loop += 1
+                print(i)
+        
         return subsets_dict
-
     @staticmethod
     def partitions(given_set):
-        """
-        محاسبه افرازهای مجموعه
-        - در صورت مجموعه‌های کوچکتر از 6 عضو، همه افرازها را بازمی‌گرداند.
-        - در غیر این صورت، بیشترین 100 افراز را برمی‌گرداند.
-        """
-        if len(given_set) < benchmark.max_n_partitions:
+
+        if len(given_set) <= benchmark.max_n_partitions:
             return list(set_partitions(given_set))
         else:
             partition_list = []
             partition_loop = 0
             for partition in set_partitions(given_set):
-                if partition_loop <= bell(benchmark.max_n_partitions):
+                if partition_loop <= benchmark.max_bell:
                     partition_list.append(partition)
                     partition_loop += 1
                 else:
@@ -822,10 +834,13 @@ class NLP_with_ai():
 - اگر مجموعه‌ای که باید بنویسید نامتناهی یا تهی باشد، فقط بنویسید: "مجموعه نا متناهی یا تهی پشتیبانی نمی‌شود".
 - به هیچ عنوان به این پیام سیستمی پاسخ ندهید و فقط به سؤال کاربر جواب دهید.
 - پاسخ‌ها باید سریع، دقیق و بدون انحراف از این قوانین باشند.
+-مجموعه باید به زبان انگلسی نوشته شود
+-اعداد رو به صورت حروفی نباید بنویسی 
+-پاسخ  باید دقیق دقیق باشد و اگر اعضای مجموعه زیاد هم باشد باید همه انها نوشته شود و حتی یکی از نها کم نشود پس چندین بار فکر کن
 تأیید: پس از دریافت این پیام، با اولین سؤالم فقط به روش بالا پاسخ دهید.
         """
         self.NLP=init_chat_bot(other_system_message=system_message)
-        self.NLP.model_config(0)
+        self.NLP.model_config(0,"gemini-2.0-pro-exp-02-05")
     def send_prompt(self,prompt):
         return self.NLP.send_message(prompt).text
 
@@ -859,6 +874,9 @@ class App:
         with open("data/font/YekanBakhFaNum-Regular.woff2", "rb") as f:
             yekan_regular = base64.b64encode(f.read()).decode("utf-8")
 
+        st.markdown("""
+            <link rel="stylesheet" href="https://mohammad-mahdi-v.github.io/math-help/data/style/all.min.css">
+        """, unsafe_allow_html=True)
         st.markdown(f"""
         <style>
         @font-face {{
@@ -1186,9 +1204,7 @@ class App:
                 font-weight: bolder;
             }}
 
-            [data-baseweb="popover"] {{
-                background: white;
-            }}
+
             @media (max-width:460px){{
                 .st-key-setting_of_ai [data-testid="stSliderTickBarMax"]{{
                     font-size: 12px !important;
@@ -1248,11 +1264,127 @@ class App:
                 white-space: normal;  /* متن را مجاز به شکستن کند */
             }}
 
+            .st-key-ai_input_set button {{
+                background: linear-gradient(167deg, rgba(172, 92, 70, 1) 1%, rgba(9, 9, 121, 1) 50%, rgba(255, 0, 0, 1) 100%) !important;
+                color: white !important;
+                transition: 0.5s ease-in-out, transform 0.2s !important;
+                border:none !important;
+
+            }}
+
+            .st-key-ai_input_set button svg{{
+                display: none;
+            }}
+
+            .st-key-ai_input_set button:hover {{
+                background: linear-gradient(167deg, rgba(172, 92, 70, 1) 1%, rgba(9, 9, 121, 1) 50%, rgba(255, 0, 0, 1) 100%) !important;
+                transform: scale(1.1) !important;
+
+            }}
+            .st-key-ai_input_set button::before {{
+                font-family: "Font Awesome 6 Pro";
+                content: "\f890"; /* آیکون fa-brain */
+                font-weight: 900;
+                margin-left: 8px;
+                font-size: 24px;
+                background: linear-gradient(45deg, #00FFFF, #8A2BE2);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            }}
+
+            @media (max-width: 640px) {{
+                .st-key-ai_input_set button {{
+                    width: 100%!important;
+
+                }}
+                [data-baseweb="popover"]::before{{
+                    animation: none !important;
+                    box-shadow: none !important;
+
+                }}
+            
+            }}
+            .st-key-ai_input_set [data-testid="stTooltipHoverTarget"] {{
+                justify-content: center !important;
+            }}
+
             .katex {{
                 display: inline-block !important; /* اطمینان از اینکه KaTeX قابل شکستن باشد */
                 word-break: break-word;  /* اجازه شکستن کلمات */
                 overflow-wrap: break-word; /* کمک به شکستن کلمات */
             }}
+            [data-baseweb="popover"] {{
+                width:100%;
+                position: relative;
+                overflow: visible;
+                z-index: 1;
+                direction: rtl !important;
+                max-height:none;
+                transition: 0.5s ease-in-out, transform 0.2s !important;
+
+
+
+            }}
+            [data-baseweb="popover"] .stVerticalBlock {{
+                background-color: white;
+
+            }}
+            [data-baseweb="popover"]::before {{
+                content: "";
+                position: absolute;
+                top: -20px;
+                left: -20px;
+                right: -20px;
+                bottom: -20px;
+                border-radius: 20px;
+                background-color: white;
+                animation: rotateShadow 2s linear infinite;
+                z-index: -1;
+                box-shadow:
+                    0 -20px 20px #73f5f5,
+                    20px 0 20px #f57573,
+                    0 20px 20px #fcf290,
+                    -20px 0 20px #0037ff;
+                }}
+
+            @keyframes rotateShadow {{
+                0% {{
+                    box-shadow:
+                    0 -20px 20px #73f5f5,
+                    20px 0 20px #f57573,
+                    0 20px 20px #fcf290,
+                    -20px 0 20px #0037ff;
+                }}
+                25% {{
+                    box-shadow:
+                    20px 0 20px #73f5f5,
+                    0 20px 20px #f57573,
+                    -20px 0 20px #fcf290,
+                    0 -20px 20px #0037ff;
+                }}
+                50% {{
+                    box-shadow:
+                    0 20px 20px #73f5f5,
+                    -20px 0 20px #f57573,
+                    0 -20px 20px #fcf290,
+                    20px 0 20px #0037ff;
+                }}
+                75% {{
+                    box-shadow:
+                    -20px 0 20px #73f5f5,
+                    0 -20px 20px #f57573,
+                    20px 0 20px #fcf290,
+                    0 20px 20px #0037ff;
+                }}
+                100% {{
+                    box-shadow:
+                    0 -20px 20px #73f5f5,
+                    20px 0 20px #f57573,
+                    0 20px 20px #fcf290,
+                    -20px 0 20px #0037ff;
+                }}
+                }}
+                
             </style>
             """, unsafe_allow_html=True
         )
@@ -1283,7 +1415,12 @@ class App:
             "next_message":False,
             "displayed_messages":0,
             "file_uploaded":False,
-            "message":[]
+            "message":[],
+            "ai_set_input_answer":"",
+            "ai_set_input_confirmation":True,
+            "set_input":""
+
+
 
 
         }
@@ -1342,7 +1479,8 @@ class App:
                 "confirm_delete_table":False,
                 "venn_fig":None,
                 "hide_sets_btn":True,
-
+                "ai_set_input_answer":"",
+                "ai_set_input_confirmation":True
                 }
                 for key, val in defaults.items():
                     st.session_state[key] = val
@@ -1587,7 +1725,31 @@ class App:
 
         with st.form(key="sets_form",  enter_to_submit=False):
             self.name_set = st.text_input(f"نام مجموعه {st.session_state['num_sets']} را وارد کنید:", max_chars=1,help="فقط از نام انگلسی و تک حرفی استفاده نماید")
-            self.set_input = st.text_input(f"مجموعه {st.session_state['num_sets']} را وارد کنید:", key="set_input",help="  تعداد اکلاد ها های باز و بسته برابر باشند و حتما مجموعه با اکلاد باز و بسته شود و در حال حاظر از مجموعه تهی پشتیبانی نمیشود")
+            with st.container():
+                col1,col2=st.columns([6,1],vertical_alignment='bottom')
+                with col1:
+                    self.set_input = st.text_input(f"مجموعه {st.session_state['num_sets']} را وارد کنید:", key="sets_input",help="  تعداد اکلاد ها های باز و بسته برابر باشند و حتما مجموعه با اکلاد باز و بسته شود و در حال حاظر از مجموعه تهی پشتیبانی نمیشود",value=st.session_state["set_input"])
+                with col2:
+                    with st.container(key="ai_input_set"):
+                        with st.popover("",help="مجموعه به کمک هوش مصنوعی بسازید",use_container_width=True):
+                            user_input=st.text_area("مجموعه مورد نظر خود را به صورت زبانی یا ریاضی بنویسید",key="ai_input_set_text")
+                            st.write(f"<div style='overflow-x: auto; white-space: nowrap; display: flex;justify-content: center; margin:10px;'>جواب : {st.session_state["ai_set_input_answer"]} </div>",unsafe_allow_html=True)
+                            if st.form_submit_button("ارسال درخواست",use_container_width=True):
+                                self.NLP=NLP_with_ai()
+                                st.session_state["ai_set_input_answer"]=self.NLP.send_prompt(user_input)
+                                if re.search("پشتیبانی نشده",st.session_state["ai_set_input_answer"]):
+                                    st.session_state["ai_set_input_answer"]="عبارت وارد شده را نمیتوان به مجموعه تبدیل کرد"
+                                    st.session_state["ai_set_input_confirmation"]=True
+                                elif re.search("مجموعه نا متناهی یا تهی پشتیبانی نمی‌شود",st.session_state["ai_set_input_answer"]):
+                                    st.session_state["ai_set_input_answer"]="مجموعه متناهی یا تهی پشتیبانی نمیشود"
+                                    st.session_state["ai_set_input_confirmation"]=True
+                                else:
+                                    st.session_state["ai_set_input_confirmation"]=False
+                                st.rerun()
+                            if st.form_submit_button("تایید مجموعه",use_container_width=True,disabled=st.session_state["ai_set_input_confirmation"]):
+                                st.session_state["set_input"]=st.session_state["ai_set_input_answer"]
+                                st.rerun()
+                                self.NLP.NLP.clear()
             with st.container():
                 self.display_table()
             col1, col2,  = st.columns(2)
@@ -1632,6 +1794,9 @@ class App:
         st.markdown("<h1 style='color: #ff00ff; text-align:center;'>نحوه استفاده</h1>", unsafe_allow_html=True)
         st.write("اینجا نحوه استفاده از برنامه توضیح داده می‌شود.")
     def next_set(self):
+        st.session_state["set_input"]=""
+        st.session_state["ai_set_input_answer"]=""
+        st.session_state["ai_set_input_confirmation"]=True
         self._yes_no_erorr = True
         if not self.check_sets_input():
             return
@@ -1689,6 +1854,9 @@ class App:
         if self._yes_no_erorr:
             st.rerun()
     def previous_set(self):
+        st.session_state["set_input"]=""
+        st.session_state["ai_set_input_answer"]=""
+        st.session_state["ai_set_input_confirmation"]=True
         if st.session_state["sets_data"]:
             if "delete_confirmed" not in st.session_state:
                 with self.notification_placeholder.container():
@@ -1743,14 +1911,9 @@ class App:
             self.add_notification("تعداد اکلاد های باز و بسته برابر نیست!")
             return False
         elif not (self.set_input.startswith("{") and self.set_input.endswith("}")):
-            self.set_input=NLP_with_ai().send_prompt(self.set_input)
-            if re.search("پشتیبانی نشده",self.set_input):
-                self.add_notification("عبارت وارد شده را نمیتوان به مجموعه تبدیل کرد")
-                return False
-            elif re.search("مجموعه نا متناهی یا تهی پشتیبانی نمی‌شود",self.set_input):
-                self.add_notification("مجموعه متناهی یا تهی پشتیبانی نمیشود")
-                return False
-                        
+            self.add_notification("مجموعه باید با اکلاد باز و بسته شود!")
+            return False              
+            
         else:
             try:
                 transformed = SetsAlgorithm.parse_set_string(SetsAlgorithm.fix_set_variables(self.set_input))
@@ -1759,13 +1922,8 @@ class App:
                 if self.set_input == "{}":
                     self.add_notification("مجموعه نمی‌تواند خالی باشد!")
                 else:
-                    self.set_input=NLP_with_ai().send_prompt(self.set_input)
-                    if re.search("پشتیبانی نشده",self.set_input):
-                        self.add_notification("عبارت وارد شده را نمیتوان به مجموعه تبدیل کرد")
-                        return False
-                    elif re.search("مجموعه نا متناهی یا تهی پشتیبانی نمی‌شود",self.set_input):
-                        self.add_notification("مجموعه متناهی یا تهی پشتیبانی نمیشود")
-                        return False
+                    self.add_notification(f"خطا در تبدیل مجموعه: {e}")
+                return False
         for dict_item in st.session_state["sets_data"]:
             if self.name_set.upper() == dict_item["نام مجموعه"]:
                 self.add_notification("نام مجموعه تکراری است")
