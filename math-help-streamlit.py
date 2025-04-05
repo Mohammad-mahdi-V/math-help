@@ -875,7 +875,7 @@ class App:
             yekan_regular = base64.b64encode(f.read()).decode("utf-8")
 
         st.markdown("""
-            <link rel="stylesheet" href="https://mohammad-mahdi-v.github.io/math-help/data/style/all.min.css">
+            <link rel="stylesheet" href="https://mohammad-mahdi-v.github.io/math-help/data/css/all.min.css">
         """, unsafe_allow_html=True)
         st.markdown(f"""
         <style>
