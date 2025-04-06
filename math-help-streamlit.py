@@ -873,9 +873,12 @@ class App:
             yekan_medium = base64.b64encode(f.read()).decode("utf-8")
         with open("data/font/YekanBakhFaNum-Regular.woff2", "rb") as f:
             yekan_regular = base64.b64encode(f.read()).decode("utf-8")
+        with open("data/img/file.svg", "rb") as f:
+            self.jupiter_logo = base64.b64encode(f.read()).decode("utf-8")
 
         st.markdown("""
-            <link rel="stylesheet" href="https://mohammad-mahdi-v.github.io/math-help/data/css/all.min.css">
+            <link rel="stylesheet" href="https://mohammad-mahdi-v.github.io/math-help/data/css/all.min.css
+">
         """, unsafe_allow_html=True)
         st.markdown(f"""
         <style>
@@ -1265,10 +1268,9 @@ class App:
             }}
 
             .st-key-ai_input_set button {{
-                background: linear-gradient(167deg, rgba(172, 92, 70, 1) 1%, rgba(9, 9, 121, 1) 50%, rgba(255, 0, 0, 1) 100%) !important;
                 color: white !important;
                 transition: 0.5s ease-in-out, transform 0.2s !important;
-                border:none !important;
+                border:solid #050099 !important;
 
             }}
 
@@ -1277,21 +1279,38 @@ class App:
             }}
 
             .st-key-ai_input_set button:hover {{
-                background: linear-gradient(167deg, rgba(172, 92, 70, 1) 1%, rgba(9, 9, 121, 1) 50%, rgba(255, 0, 0, 1) 100%) !important;
                 transform: scale(1.1) !important;
 
             }}
-            .st-key-ai_input_set button::before {{
+            .st-key-ai_input_set button::after {{
                 font-family: "Font Awesome 6 Pro";
-                content: "\f890"; /* آیکون fa-brain */
-                font-weight: 900;
-                margin-left: 8px;
-                font-size: 24px;
-                background: linear-gradient(45deg, #00FFFF, #8A2BE2);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
+                content: "\\f890" !important;
+                font-size: 30px;
+                position: absolute;
+                color: white;
             }}
+            
+            .st-key-ai_input_set button::before{{
+                content: "";
+                background: linear-gradient(55deg, #001332, #3b0000, #00171a, #33073b);
+                position: absolute;
+                top: -2px;
+                left: -2px;
+                background-size: 600%;
+                /* z-index: -1; */
+                width: calc(100% + 4px);
+                height: calc(100% + 4px);
+                filter: blur(8px);
+                animation: glowing 20s linear infinite;
+                transition: opacity .3s ease-in-out;
+                border-radius: 10px;
+            }}
+            @keyframes glowing{{
+                0%{{background-position: 0,0;}}
+                50%{{background-position: 400%,0;}}
+                100%{{background-position: 0,0;}}
 
+            }}
             @media (max-width: 640px) {{
                 .st-key-ai_input_set button {{
                     width: 100%!important;
@@ -1300,6 +1319,7 @@ class App:
                 [data-baseweb="popover"]::before{{
                     animation: none !important;
                     box-shadow: none !important;
+
 
                 }}
             
@@ -1337,16 +1357,10 @@ class App:
                 right: -20px;
                 bottom: -20px;
                 border-radius: 20px;
-                background-color: white;
+                background: white;
                 animation: rotateShadow 2s linear infinite;
                 z-index: -1;
-                box-shadow:
-                    0 -20px 20px #73f5f5,
-                    20px 0 20px #f57573,
-                    0 20px 20px #fcf290,
-                    -20px 0 20px #0037ff;
-                }}
-
+            }}
             @keyframes rotateShadow {{
                 0% {{
                     box-shadow:
@@ -1384,7 +1398,53 @@ class App:
                     -20px 0 20px #0037ff;
                 }}
                 }}
-                
+            .st-key-us-info{{
+                background-color: #031f26bf !important;
+                border-radius:50px;
+                padding:20px;
+                text-align: center;
+                color:white;
+    
+            }}
+            .st-key-us-info p{{
+                font-size:25px;
+            }}
+            .st-key-us-info a{{
+                font-size:25px;
+                margin:10px;
+            }}
+            .st-key-us-info::before {{
+                content: "";
+                position: absolute;
+                right:0;
+                width: inherit;
+                height: 100%;
+                background: url('data:image/svg+xml;base64,{self.jupiter_logo}')no-repeat center ;
+                filter: blur(1.5px);
+            }}
+            .st-key-info-container{{
+                padding:0 0 15px 0;
+            }}
+            .st-key-us-story{{
+                background-color: #031f26bf !important;
+                border-radius:50px;
+                padding:20px;
+                text-align: center;
+                color:white;
+                margin-top:20px;
+            }}
+            .st-key-us-story p{{
+                font-size:25px;
+            }}
+            .st-key-us-story::before{{
+                content: "";
+                position: absolute;
+                right:0;
+                width: inherit;
+                height: 100%;
+                background: url('data:image/svg+xml;base64,{self.jupiter_logo}')no-repeat center ;
+                filter: blur(1.5px);
+            }}
             </style>
             """, unsafe_allow_html=True
         )
@@ -1501,6 +1561,8 @@ class App:
         with col1:
             if st.button("درباره ما", use_container_width=True):
                 st.session_state["current_section"] = "about"
+                st.session_state["show_hr_sidebar"] = False
+
         with col2:
             if st.button("نحوه کار در این بخش", use_container_width=True):
                 st.session_state["current_section"] = "how_to_use"
@@ -1774,8 +1836,9 @@ class App:
                 st.session_state["current_section"] = "display_sets"  # یک مقدار جدید برای نمایش نتایج
                 st.rerun()
         if end_btn:
-            if not st.session_state["num_sets"]==1:
-                st.session_state["show_hr_sidebar"] = True
+            st.session_state["num_sets"]-1
+            if  st.session_state["num_sets"]<=1:
+                st.session_state["show_hr_sidebar"] = False
             st.session_state["calc_result"]="در انتظار دریافت عبارت"
             st.session_state["current_section"] = "display_sets"  # یک مقدار جدید برای نمایش نتایج
             st.session_state["num_sets"] -= 1
@@ -1787,9 +1850,27 @@ class App:
         st.write("اینجا اطلاعات مربوط به خطوط نمایش داده می‌شود.")
 
     def about_us(self):
-        st.markdown("<h1 style='color: #ff8000; text-align:center;'>درباره ما</h1>", unsafe_allow_html=True)
-        st.write("اینجا اطلاعات درباره تیم و پروژه آورده می‌شود.")
-
+        with st.container(key="us-info"):
+            st.markdown("<h1 style= text-align:center;'>اطلاعات تماس </h1>", unsafe_allow_html=True)
+            st.markdown("<hr style='border: white 1px, solid;'>",unsafe_allow_html=True)
+            with st.container(key="info-container"):
+                st.write("بنیان گذاران : محمد مهدی وافری - محمد امین سیفی")
+                st.write("""
+        <a href="mailto:jupitercodeir@gmail.com" style="color: white; text-decoration: none;">
+            jupitercodeir@gmail.com
+        </a>""", unsafe_allow_html=True)
+                st.write("""        <a href="https://github.com/Mohammad-mahdi-V/math-help" style="color: white; text-decoration: none;">
+                GitHub Repo: https://github.com/Mohammad-mahdi-V/math-help
+        </a>""",unsafe_allow_html=True)
+        with st.container(key="us-story"):
+            st.markdown("<h1 style= text-align:center;'>داستان ما</h1>", unsafe_allow_html=True)
+            st.markdown("<hr style='border: white 1px, solid;'>",unsafe_allow_html=True)
+            with st.container(key="story-container"):
+                st.write("""
+                .در اینجا میخوام از اغاز داستان ما بگویم . ما یعنی تیم ژوپیتر. من نویسنده این داستان واقعی محمد مهدی وافری هستم یکی از دو بنیان گذار تیم ژوپیتر . چرا ما به خودمان می گویم بنیان گذار ، زیرا تازه مث هلپ ژوپیتر اغازی است بر پروژه های ژوپیتر 
+                داستان ما دو نفر از روزی شروع میشود که 13 سال سن داشتیم و 10 دقیقه نبود که ازمون خرداد مان تمام شده بود ما هردو در یک مدرسه بودیم اما کلاس های مان متفاوت  به همین دلیل تا ان زمان هم دیگر را نمیشناختیم . اقای مدیر ما را صدا زده بود ، یک استارتاپ از دانشگاه محقق اردبیلی در حال ایجاد دوره های رایگان برای افراد برگزیده از مدارس برتر اردبیل بود  ما در این دوره با هم اشنا شدیم و دوست شدیم.
+                         ما تا امسال باهم در تیم های مقابل بودیم اما امسال تصمیم گرفتیم در یک گروه قرار بگیریم و یک شب وقتی در حال بررسی ایده هوش مصنوعی بودیم به صورت اتفاقی اسم ژوپیتر را اسم تیم خود گذاشتیم       
+                """)
     def how_to_use(self):
         st.markdown("<h1 style='color: #ff00ff; text-align:center;'>نحوه استفاده</h1>", unsafe_allow_html=True)
         st.write("اینجا نحوه استفاده از برنامه توضیح داده می‌شود.")
