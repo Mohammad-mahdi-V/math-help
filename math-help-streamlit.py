@@ -15,7 +15,11 @@ import subprocess
 import atexit
 import ctypes
 from sympy import bell
-
+import string
+import pandas as pd
+from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
+from streamlit_javascript import st_javascript  # pip install streamlit-javascript
+from matplotlib.ticker import MultipleLocator
 import sys
 import pandas as pd
 from google.generativeai.generative_models import GenerativeModel
@@ -139,6 +143,149 @@ class Benchmark:
             self.max_bell=benchmark_data["max_bell"]
         print(f"✅ نتایج بنچمارک بارگذاری شدند: max_n_subsets = {self.max_n_subsets}, max_n_partitions = {self.max_n_partitions}")
 # --------------------------------------------------
+class LineAlgorithm:
+    def __init__(self):
+        self.x, self.y = sp.symbols('x y')
+    
+    def parse_equation(self, equation):
+        original_eq = equation.strip()
+        if original_eq.lower().startswith("y="):
+            equation_body = original_eq[2:]
+            equation = f"y - ({equation_body})"
+        else:
+            equation = original_eq
+        equation = equation.replace('^', '**')
+        transformations = standard_transformations + (implicit_multiplication_application,)
+        try:
+            if "=" in equation:
+                left_str, right_str = equation.split("=")
+                left_expr = parse_expr(left_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                right_expr = parse_expr(right_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                expr = left_expr - right_expr
+            else:
+                expr = parse_expr(equation, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+            if original_eq.lower().startswith("y="):
+                sol_list = sp.solve(expr, self.y)
+                if sol_list:
+                    sol = sol_list[0]
+                    deg = sp.degree(sol, self.x)
+                    if deg == 1:
+                        m = sol.coeff(self.x)
+                        b = sol.subs(self.x, 0)
+                        if sp.simplify(sol - (m*self.x+b)) == 0:
+                            distance = abs(b) / sp.sqrt(m**2+1)
+                            distance = float(distance)
+                            info = f"شیب = {float(m):.2f}، عرض = {float(b):.2f}، فاصله = {distance:.2f}"
+                            return ("linear", sol, m, b, info)
+                        else:
+                            info = f"معادله منحنی: y = {sp.pretty(sol)}"
+                            return ("curve", sol, None, None, info)
+                    elif deg == 2:
+                        poly = sp.Poly(sol, self.x)
+                        a, b_coef, c = poly.all_coeffs()
+                        delta = b_coef**2 - 4*a*c
+                        info = f"a = {a}, b = {b_coef}, c = {c}, delta = {delta}"
+                        return ("quadratic", sol, a, b_coef, c, delta, info)
+                    else:
+                        info = f"معادله منحنی: y = {sp.pretty(sol)}"
+                        return ("curve", sol, None, None, info)
+                else:
+                    raise ValueError("معادله قابل حل نیست.")
+            else:
+                deg = sp.degree(expr, self.x, self.y)
+                if deg == 1:
+                    poly = sp.Poly(expr, self.x, self.y)
+                    coeffs = poly.all_coeffs()
+                    while len(coeffs) < 3:
+                        coeffs.insert(0, 0)
+                    a, b_coef, c = coeffs
+                    delta = abs(c)/sp.sqrt(a**2+b_coef**2) if (a**2+b_coef**2)!=0 else 0
+                    info = f"دلتا = {float(delta):.2f}، a = {a}، b = {b_coef}، c = {c}"
+                    return ("general", expr, a, b_coef, c, info)
+                else:
+                    sol = sp.solve(expr, self.y)
+                    if sol:
+                        sol = sol[0]
+                        info = f"معادله منحنی: y = {sp.pretty(sol)}"
+                        return ("curve", sol, None, None, info)
+                    else:
+                        raise ValueError("معادله قابل حل نیست.")
+        except Exception as e:
+            st.error("خطا در تبدیل معادله: " + str(e))
+            return ("error", None, None, None, "خطا در تبدیل معادله.")
+    
+    def plot_equation(self, equation):
+        result = self.parse_equation(equation)
+        eq_type = result[0]
+        plt.figure(figsize=(6, 4))
+        x_vals = np.linspace(-10, 10, 400)
+        if eq_type in ("linear", "curve"):
+            sol = result[1]
+            try:
+                func = sp.lambdify(self.x, sol, 'numpy')
+                y_vals = func(x_vals)
+                plt.plot(x_vals, y_vals, label=f'y = {sp.pretty(sol)}')
+            except Exception as e:
+                st.error("Error in plot_equation: " + str(e))
+        elif eq_type == "quadratic":
+            _, sol, a, b_coef, c, delta, info = result
+            func = sp.lambdify(self.x, a*self.x**2 + b_coef*self.x + c, 'numpy')
+            y_vals = func(x_vals)
+            plt.plot(x_vals, y_vals, label=f'y = {a}x²+{b_coef}x+{c}')
+        elif eq_type == "general":
+            _, expr, a, b_coef, c, info = result
+            if b_coef != 0:
+                m_val = -a/b_coef
+                intercept = -c/b_coef
+                func = sp.lambdify(self.x, m_val*self.x+intercept, 'numpy')
+                y_vals = func(x_vals)
+                plt.plot(x_vals, y_vals, label=f'y = {m_val:.2f}x+{intercept:.2f}')
+            else:
+                x_vert = -c/a
+                plt.axvline(x=x_vert, color='blue', label=f"x = {x_vert:.2f}")
+        ax = plt.gca()
+        ax.xaxis.set_major_locator(MultipleLocator(50))
+        ax.xaxis.set_minor_locator(MultipleLocator(10))
+        ax.yaxis.set_major_locator(MultipleLocator(50))
+        ax.yaxis.set_minor_locator(MultipleLocator(10))
+        plt.grid(which='major', linestyle='-', linewidth=0.75)
+        plt.grid(which='minor', linestyle=':', linewidth=0.5)
+        plt.xlabel('x')
+        plt.ylabel('y')
+        plt.legend(fontsize='small')
+        plt.title('نمودار معادله')
+        plt.tight_layout()
+        return result[-1]
+    
+    def calculate_from_points(self, point1, point2):
+        x1, y1 = point1
+        x2, y2 = point2
+        if x1 == x2:
+            raise ValueError("مقادیر x نقاط نباید برابر باشند.")
+        m = (y2 - y1) / (x2 - x1)
+        b = y1 - m*x1
+        return m, b
+    
+    def plot_line_from_points(self, m, b):
+        distance = abs(b) / sp.sqrt(m**2+1)
+        distance = float(distance)
+        x_vals = np.linspace(-20, 20, 400)
+        y_vals = m*x_vals+b
+        plt.figure(figsize=(6, 4))
+        plt.plot(x_vals, y_vals, label=f'y = {m:.2f}x+{b:.2f}')
+        plt.axhline(0, color='black', linewidth=0.5)
+        plt.axvline(0, color='black', linewidth=0.5)
+        plt.grid(True, linestyle='--', linewidth=0.5)
+        plt.xlabel('x')
+        plt.ylabel('y')
+        plt.xticks(np.arange(-20, 21, 2))
+        plt.yticks(np.arange(-20, 21, 2))
+        plt.legend()
+        plt.title('نمودار خط')
+        plt.tight_layout()
+        info = f"شیب = {m:.2f}، عرض = {b:.2f}، فاصله = {distance:.2f}"
+        return info
+
 class SetsAlgorithm:
     
     def __init__(self, set_of_sets):
@@ -1445,6 +1592,18 @@ class App:
                 background: url('data:image/svg+xml;base64,{self.jupiter_logo}')no-repeat center ;
                 filter: blur(1.5px);
             }}
+            .st-key-raido-btn [role="radiogroup"]{{
+                display:inline-flex;
+            }}
+            .st-key-raido-btn [data-testid="stWidgetLabel"] {{
+                display: inline-block;
+            }}
+            .st-key-raido-btn{{
+                text-align: center;
+            }}
+            .st-key-raido-btn p{{
+                margin-right: 10px;
+            }}
             </style>
             """, unsafe_allow_html=True
         )
@@ -1478,7 +1637,14 @@ class App:
             "message":[],
             "ai_set_input_answer":"",
             "ai_set_input_confirmation":True,
-            "set_input":""
+            "set_input":"",
+            "num_eq":1,
+            "disabled_next_eq_btn": False,
+            "hide_eq_btn":True,
+            "eq_input":"",
+            "registered_lines":[]
+
+
 
 
 
@@ -1522,7 +1688,10 @@ class App:
                 st.session_state["current_section"] = "sets"
                 st.session_state["show_hr_sidebar"] = False
                 defaults = {
+                "current_section": "sets",
+                "num_sets": 1,
                 "show_advanced": False,
+                "show_hr_sidebar": False,
                 "disabled_advanced_btn": False,
                 "disabled_next_set_btn": False,
                 "sets_data": [],
@@ -1530,17 +1699,28 @@ class App:
                 "error_message": "",
                 "error_type": "error",
                 "confirm_prev": False,
-                "num_sets": 1,
                 "pending_delete_confirm": False,
                 "pending_delete_data": [],
                 "advanced_quesion": False,
                 "notifications": [],
                 "confirm_delete_open": False,
                 "confirm_delete_table":False,
+                "calc_result":"در انتظار عبارت",
                 "venn_fig":None,
                 "hide_sets_btn":True,
+                "Juopiter_cb":init_chat_bot(),
+                "next_message":False,
+                "displayed_messages":0,
+                "file_uploaded":False,
+                "message":[],
                 "ai_set_input_answer":"",
-                "ai_set_input_confirmation":True
+                "ai_set_input_confirmation":True,
+                "set_input":"",
+                "num_eq":1,
+                "disabled_next_eq_btn": False,
+                "hide_eq_btn":True,
+                "eq_input":"",
+                "registered_lines":[]
                 }
                 for key, val in defaults.items():
                     st.session_state[key] = val
@@ -1548,6 +1728,42 @@ class App:
             if st.button("خط", use_container_width=True):
                 st.session_state["current_section"] = "lines"
                 st.session_state["show_hr_sidebar"] = True
+                defaults = {
+                "num_sets": 1,
+                "show_advanced": False,
+                "show_hr_sidebar": False,
+                "disabled_advanced_btn": False,
+                "disabled_next_set_btn": False,
+                "sets_data": [],
+                "show_error_expander": False,
+                "error_message": "",
+                "error_type": "error",
+                "confirm_prev": False,
+                "pending_delete_confirm": False,
+                "pending_delete_data": [],
+                "advanced_quesion": False,
+                "notifications": [],
+                "confirm_delete_open": False,
+                "confirm_delete_table":False,
+                "calc_result":"در انتظار عبارت",
+                "venn_fig":None,
+                "hide_sets_btn":True,
+                "Juopiter_cb":init_chat_bot(),
+                "next_message":False,
+                "displayed_messages":0,
+                "file_uploaded":False,
+                "message":[],
+                "ai_set_input_answer":"",
+                "ai_set_input_confirmation":True,
+                "set_input":"",
+                "num_eq":1,
+                "disabled_next_eq_btn": False,
+                "hide_eq_btn":True,
+                "eq_input":"",
+                "registered_lines":[]
+                }
+                for key, val in defaults.items():
+                    st.session_state[key] = val
         if st.sidebar.button("گفتگو با هوش مصنوعی", use_container_width=True):
             st.session_state["current_section"] = "chatbot"
             st.session_state["show_hr_sidebar"] = True
@@ -1846,9 +2062,169 @@ class App:
         self.render_notification(self.notification_placeholder)
 
     def show_lines_section(self):
-        st.markdown("<h1 style='color: #007bff; text-align:center;'>بخش خطوط</h1>", unsafe_allow_html=True)
-        st.write("اینجا اطلاعات مربوط به خطوط نمایش داده می‌شود.")
+        self.calculator = LineAlgorithm()
+        with st.container(key="title_sets"):
+            st.markdown("<h1 style='color: #ff0000; text-align:center;'>خط</h1>", unsafe_allow_html=True)
+            self.input_type = st.radio("نوع ورود خط:", ("معادله", "نقطه‌ای"),horizontal=True,key="raido-btn")
 
+        self.notification_placeholder = st.empty()
+
+        with st.form(key="sets_form",  enter_to_submit=False):
+            self.name_eq = st.text_input(f"نام خط {st.session_state['num_eq']} را وارد کنید:", max_chars=1,help="فقط از نام انگلسی و تک حرفی استفاده نماید")
+            if self.input_type == "معادله":
+                self.eq_input = st.text_input(f"معادله خطی {st.session_state['num_eq']} وارد کنید :", key="eq_input_main")
+            else:
+                st.markdown("### نقطه اول")
+                col1, col2 = st.columns(2)
+                self.pt1_x = col1.text_input("مقدار x نقطه اول:", key="pt1_x")
+                self.pt1_y = col2.text_input("مقدار y نقطه اول:", key="pt1_y")
+                st.markdown("### نقطه دوم")
+                col3, col4 = st.columns(2)
+                self.pt2_x = col3.text_input("مقدار x نقطه دوم:", key="pt2_x")
+                self.pt2_y = col4.text_input("مقدار y نقطه دوم:", key="pt2_y")
+            with st.container():
+                self.display_table()
+            col1, col2,  = st.columns(2)
+            next_btn = col1.form_submit_button("ثبت اطلاعات", use_container_width=True,
+                                            disabled=st.session_state["disabled_next_eq_btn"],help="با این کار اطلاعات ورودی ها ثبت و  به صفحه خط بعدی می روید")
+            end_btn = col2.form_submit_button("پردازش خط های وارد شد",use_container_width=True,help="با این کار خط هایی که تا الان وارد کردید پردازش میشود",disabled=st.session_state["hide_eq_btn"])
+            prev_btn =col2.form_submit_button("خط قبلی", use_container_width=True, on_click=self.previous_eq,help="با این کار اطلعات خط قبلی پاک و دوباره دریافت میشود",disabled=st.session_state["hide_eq_btn"])
+            reg_end_btn =col1.form_submit_button(f"ثبت خط {st.session_state["num_sets"]} و پردازش خط ها", use_container_width=True,help="با این کار اطلاعات خط فعلی ثبت و به صفحه پردازش می روید")
+        if next_btn:
+            self.next_eq()
+        if reg_end_btn:
+            if not self.check_sets_input(end=True):
+                pass
+            else:
+                st.session_state["sets_data"].append({
+                    "نام مجموعه": self.name_set.upper(),
+                    "مقدار مجموعه": self.set_input
+                })
+                if not st.session_state["num_sets"]==1:
+                    st.session_state["show_hr_sidebar"] = True
+                st.session_state["calc_result"]="در انتظار دریافت عبارت"
+                st.session_state["current_section"] = "display_sets"  # یک مقدار جدید برای نمایش نتایج
+                st.rerun()
+        if end_btn:
+            st.session_state["num_sets"]-1
+            if  st.session_state["num_sets"]<=1:
+                st.session_state["show_hr_sidebar"] = False
+            st.session_state["calc_result"]="در انتظار دریافت عبارت"
+            st.session_state["current_section"] = "display_sets"  # یک مقدار جدید برای نمایش نتایج
+            st.session_state["num_sets"] -= 1
+            st.rerun()
+        self.render_notification(self.notification_placeholder)
+    @staticmethod
+    def safe_rerun():
+        try:
+            st.experimental_rerun()
+        except Exception:
+            pass
+    def next_eq(self):
+        if len(self.name_eq) != 1 or self.name_eq not in string.ascii_letters:
+            self.add_notification("نام خط باید تنها یک حرف انگلیسی باشد (مثلاً A).")
+            return  # برای جلوگیری از ادامه اجرا
+        if not self.name_eq.isupper():
+            self.add_notification("نام خط به حروف بزرگ تبدیل شد.", error_type="info")
+            self.name_eq = self.name_eq.upper()
+        duplicate = any(line["name"] == self.name_eq for line in st.session_state.registered_lines)
+        if duplicate:
+            self.add_notification("نام خط تکراری است.")
+            return
+        if self.input_type == "معادله":
+            if not self.eq_input:
+                self.add_notification("لطفاً معادله را وارد کنید.")
+                return
+            result = self.calculator.parse_equation(self.eq_input)
+            eq_type = result[0]
+            if eq_type == "error":
+                self.add_notification("فرمت معادله صحیح نیست.")
+                return
+            st.success("خط با موفقیت ثبت شد.")
+            if eq_type == "general":
+                _, expr, a, b_coef, c, info = result
+                st.session_state.registered_lines.append({
+                    "name": self.name_eq,
+                    "type": "general",
+                    "a": float(a),
+                    "b_coef": float(b_coef),
+                    "c": float(c),
+                    "input": self.eq_input,
+                    "info": info
+                })
+            elif eq_type == "quadratic":
+                _, sol, a, b_coef, c, delta, info = result
+                st.session_state.registered_lines.append({
+                    "name": self.name_eq,
+                    "type": "quadratic",
+                    "a": float(a),
+                    "b_coef": float(b_coef),
+                    "c": float(c),
+                    "delta": float(delta),
+                    "input": self.eq_input,
+                    "info": info
+                })
+            else:
+                _, sol, m, b, info = result
+                st.session_state.registered_lines.append({
+                    "name": self.name_eq,
+                    "type": eq_type,
+                    "m": float(m) if m is not None else None,
+                    "b": float(b) if b is not None else None,
+                    "input": self.eq_input,
+                    "info": info
+                })
+        else:  # حالت نقطه‌ای
+            if not self.pt1_x or not self.pt1_y or not self.pt2_x or not self.pt2_y:
+                self.add_notification("لطفاً مقدارهای x و y هر دو نقطه را وارد کنید.")
+                return
+            try:
+                point1 = (float(self.pt1_x), float(self.pt1_y))
+                point2 = (float(self.pt2_x), float(self.pt2_y))
+            except Exception:
+                self.add_notification("فرمت مقادیر عددی صحیح نیست.")
+                return
+            try:
+                m_val, b_val = self.calculator.calculate_from_points(point1, point2)
+            except Exception as e:
+                self.add_notification(str(e))
+                return
+            distance = abs(b_val) / np.sqrt(m_val**2 + 1)
+            computed_form = f"y = {m_val:.2f}x + {b_val:.2f}"
+            info = f"شیب = {m_val:.2f}، عرض = {b_val:.2f}، فاصله = {distance:.2f}"
+            st.session_state.registered_lines.append({
+                "name": self.name_eq,
+                "type": "linear",
+                "m": float(m_val),
+                "b": float(b_val),
+                "input": computed_form,
+                "info": info
+            })
+        # افزایش شمارنده و رفرش فرم
+        st.session_state["num_eq"] += 1
+        st.session_state["hide_eq_btn"] = False  # فعال کردن دکمه‌های اضافی
+        st.session_state["disabled_next_eq_btn"] = False  # مطمئن شدن که دکمه بعدی فعال باشه
+        App.safe_rerun()
+    def previous_eq(self):
+        st.session_state["eq_input"]=""
+        if st.session_state["registered_lines"]:
+            if "delete_confirmed" not in st.session_state:
+                with self.notification_placeholder.container():
+                    with st.expander("تایید", expanded=True):
+                        st.info("مجموعه قبلی را حذف میکنیم ایا مطمئن هستید")
+                        col1, col2 = st.columns([1, 1])
+                        with col1:
+                            def confirm_delete():
+                                st.session_state["registered_lines"].pop()
+                                st.session_state["num_eq"] = len(st.session_state["registered_lines"]) + 1
+                                st.session_state["disabled_next_set_btn"] = False
+                                if st.session_state["num_eq"]==1:
+                                    st.session_state["hide_eq_btn"]=True
+                            st.button("بله", key="confirm_yes", use_container_width=True, on_click=confirm_delete)
+                        with col2:
+
+                            st.button("خیر", key="confirm_no", use_container_width=True)
+                        
     def about_us(self):
         with st.container(key="us-info"):
             st.markdown("<h1 style= text-align:center;'>اطلاعات تماس </h1>", unsafe_allow_html=True)
@@ -1961,12 +2337,14 @@ class App:
 
 
 
-    def display_table(self):
-        if st.session_state["sets_data"]:
-            self.df = pd.DataFrame(st.session_state["sets_data"])
 
-            self.edited_df = st.data_editor(
-                self.df,
+    def display_table(self):
+        # نمایش جدول مجموعه‌ها
+        if st.session_state["sets_data"]:
+            self.df_sets = pd.DataFrame(st.session_state["sets_data"])
+            st.subheader("جدول مجموعه‌های ثبت‌شده")
+            st.data_editor(
+                self.df_sets,
                 num_rows="fixed",
                 use_container_width=True,
                 height=200,
@@ -1976,7 +2354,30 @@ class App:
                 },
                 hide_index=True
             )
-
+        
+        # نمایش جدول خط‌ها
+        if st.session_state["registered_lines"]:
+            data_lines = []
+            for line in st.session_state["registered_lines"]:
+                name = line["name"]
+                equation = line["input"]
+                data_lines.append({
+                    "نام خط": name,
+                    "معادله": equation
+                })
+            self.df_lines = pd.DataFrame(data_lines)
+            st.subheader("جدول خط‌های ثبت‌شده")
+            st.data_editor(
+                self.df_lines,
+                num_rows="fixed",
+                use_container_width=True,
+                height=200,
+                column_config={
+                    "نام خط": st.column_config.TextColumn("نام خط", disabled=True),
+                    "معادله": st.column_config.TextColumn("معادله", disabled=True)
+                },
+                hide_index=True
+            )
     def check_sets_input(self,end=False):
         self.set_input = self.set_input.replace(" ", "")
         if not self.name_set:

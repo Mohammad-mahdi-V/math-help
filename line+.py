@@ -592,7 +592,7 @@ class LineAlgorithm:
         return info
 
 def linear_equations_page():
-    st.title("رسم چند خط و منحنی (معادلات خطی)")
+
     if "registered_lines" not in st.session_state:
         st.session_state.registered_lines = []
     if "delete_index" not in st.session_state:
