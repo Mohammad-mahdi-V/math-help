@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import string
 import pandas as pd
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
-from streamlit_javascript import st_javascript  # pip install streamlit-javascript
+from streamlit_javascript import st_javascript  
 from matplotlib.ticker import MultipleLocator
 import base64
 # ====================================
@@ -92,7 +92,7 @@ def setup_page():
             height: 100%;
             background: url('data:image/png;base64,{bg}') no-repeat center center;
             background-size: cover;
-            filter: blur(1.5px);
+            filter: blur(2.5px);
 
         }}
 
@@ -241,12 +241,12 @@ def setup_page():
         }}
         @media (min-width: 600px) {{
             .stApp::before {{
-                filter: blur(2.5px);
+                filter: blur(3.5px);
             }}
         }}
         @media (min-width: 1200px) {{
             .stApp::before {{
-                filter: blur(3px);
+                filter: blur(5.5px);
             }}
         }}
 
@@ -454,130 +454,138 @@ class LineAlgorithm:
     
     def parse_equation(self, equation):
         original_eq = equation.strip()
-        if original_eq.lower().startswith("y="):
-            equation_body = original_eq[2:]
-            equation = f"y - ({equation_body})"
-        else:
-            equation = original_eq
-        equation = equation.replace('^', '**')
+        eq_processed = original_eq.replace('^', '**')  # Replace ^ with ** for exponentiation
         transformations = standard_transformations + (implicit_multiplication_application,)
         try:
-            if "=" in equation:
-                left_str, right_str = equation.split("=")
+            if "=" in eq_processed:
+                left_str, right_str = eq_processed.split("=")
                 left_expr = parse_expr(left_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
                 right_expr = parse_expr(right_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
-                expr = left_expr - right_expr
+                expr = sp.simplify(left_expr - right_expr)  # Move everything to one side (e.g., y^2 - 7x^2 - 6y = 0)
             else:
-                expr = parse_expr(equation, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
-            if original_eq.lower().startswith("y="):
-                sol_list = sp.solve(expr, self.y)
-                if sol_list:
-                    sol = sol_list[0]
+                expr = parse_expr(eq_processed, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+
+            # Try solving for y
+            sol_y = sp.solve(expr, self.y)
+            if sol_y:
+                if len(sol_y) > 1:
+                    info = "معادله دارای چند جواب است: " + ", ".join([sp.pretty(s) for s in sol_y])
+                    return ("implicit_multiple", sol_y, None, None, info)
+                sol = sol_y[0]
+                try:
                     deg = sp.degree(sol, self.x)
-                    if deg == 1:
-                        m = sol.coeff(self.x)
-                        b = sol.subs(self.x, 0)
-                        if sp.simplify(sol - (m*self.x+b)) == 0:
-                            distance = abs(b) / sp.sqrt(m**2+1)
-                            distance = float(distance)
-                            info = f"شیب = {float(m):.2f}، عرض = {float(b):.2f}، فاصله = {distance:.2f}"
-                            return ("linear", sol, m, b, info)
-                        else:
-                            info = f"معادله منحنی: y = {sp.pretty(sol)}"
-                            return ("curve", sol, None, None, info)
-                    elif deg == 2:
-                        poly = sp.Poly(sol, self.x)
-                        a, b_coef, c = poly.all_coeffs()
-                        delta = b_coef**2 - 4*a*c
-                        info = f"a = {a}, b = {b_coef}, c = {c}, delta = {delta}"
-                        return ("quadratic", sol, a, b_coef, c, delta, info)
-                    else:
-                        info = f"معادله منحنی: y = {sp.pretty(sol)}"
-                        return ("curve", sol, None, None, info)
-                else:
-                    raise ValueError("معادله قابل حل نیست.")
-            else:
-                deg = sp.degree(expr, self.x, self.y)
+                except Exception:
+                    deg = None
                 if deg == 1:
-                    poly = sp.Poly(expr, self.x, self.y)
-                    coeffs = poly.all_coeffs()
-                    while len(coeffs) < 3:
-                        coeffs.insert(0, 0)
-                    a, b_coef, c = coeffs
-                    delta = abs(c)/sp.sqrt(a**2+b_coef**2) if (a**2+b_coef**2)!=0 else 0
-                    info = f"دلتا = {float(delta):.2f}، a = {a}، b = {b_coef}، c = {c}"
-                    return ("general", expr, a, b_coef, c, info)
-                else:
-                    sol = sp.solve(expr, self.y)
-                    if sol:
-                        sol = sol[0]
+                    m = sp.simplify(sol.coeff(self.x))
+                    b = sp.simplify(sol.subs(self.x, 0))
+                    if sp.simplify(sol - (m * self.x + b)) == 0:
+                        distance = abs(b) / sp.sqrt(m**2 + 1)
+                        info = f"شیب = {float(m):.2f}، عرض = {float(b):.2f}، فاصله = {float(distance):.2f}"
+                        return ("linear", sol, m, b, info)
+                    else:
                         info = f"معادله منحنی: y = {sp.pretty(sol)}"
                         return ("curve", sol, None, None, info)
+                elif deg is not None and deg > 1:
+                    info = f"معادله چندجمله‌ای: y = {sp.pretty(sol)}"
+                    return ("parabolic", sol, None, None, info)
+                else:
+                    info = f"معادله منحنی: y = {sp.pretty(sol)}"
+                    return ("curve", sol, None, None, info)
+            else:
+                # Try solving for x
+                sol_x = sp.solve(expr, self.x)
+                if sol_x:
+                    sol = sol_x[0]
+                    try:
+                        deg = sp.degree(sol, self.y)
+                    except Exception:
+                        deg = None
+                    if deg == 1:
+                        info = f"x = {sp.pretty(sol)}"
+                        return ("implicit_x", sol, None, None, info)
                     else:
-                        raise ValueError("معادله قابل حل نیست.")
+                        info = f"معادله منحنی (حل نسبت به x): x = {sp.pretty(sol)}"
+                        return ("curve", sol, None, None, info)
+                else:
+                    # If neither x nor y can be isolated, treat as implicit
+                    info = f"معادله ضمنی: {sp.pretty(expr)} = 0"
+                    return ("implicit", expr, None, None, info)
         except Exception as e:
             st.error("خطا در تبدیل معادله: " + str(e))
             return ("error", None, None, None, "خطا در تبدیل معادله.")
-    
+
     def plot_equation(self, equation):
         result = self.parse_equation(equation)
-        eq_type = result[0]
+        eq_type, sol, m, b, info = result
         plt.figure(figsize=(6, 4))
+        
+        if eq_type == "error":
+            return info
+        
         x_vals = np.linspace(-10, 10, 400)
-        if eq_type in ("linear", "curve"):
-            sol = result[1]
+        if eq_type == "linear":
+            func = sp.lambdify(self.x, sol, 'numpy')
+            y_vals = func(x_vals)
+            plt.plot(x_vals, y_vals, label=f'y = {sp.pretty(sol)}')
+        
+        elif eq_type == "implicit_multiple":
+            for idx, s in enumerate(sol):
+                try:
+                    func = sp.lambdify(self.x, s, 'numpy')
+                    y_vals = func(x_vals)
+                    plt.plot(x_vals, y_vals, label=f'Branch {idx+1}: y = {sp.pretty(s)}')
+                except Exception as e:
+                    st.error(f"خطا در رسم شاخه {idx+1}: {str(e)}")
+        
+        elif eq_type in ["curve", "parabolic", "implicit_x"]:
             try:
                 func = sp.lambdify(self.x, sol, 'numpy')
                 y_vals = func(x_vals)
-                plt.plot(x_vals, y_vals, label=f'y = {sp.pretty(sol)}')
+                plt.plot(x_vals, y_vals, label=f'{equation}')
             except Exception as e:
-                st.error("Error in plot_equation: " + str(e))
-        elif eq_type == "quadratic":
-            _, sol, a, b_coef, c, delta, info = result
-            func = sp.lambdify(self.x, a*self.x**2 + b_coef*self.x + c, 'numpy')
-            y_vals = func(x_vals)
-            plt.plot(x_vals, y_vals, label=f'y = {a}x²+{b_coef}x+{c}')
-        elif eq_type == "general":
-            _, expr, a, b_coef, c, info = result
-            if b_coef != 0:
-                m_val = -a/b_coef
-                intercept = -c/b_coef
-                func = sp.lambdify(self.x, m_val*self.x+intercept, 'numpy')
-                y_vals = func(x_vals)
-                plt.plot(x_vals, y_vals, label=f'y = {m_val:.2f}x+{intercept:.2f}')
-            else:
-                x_vert = -c/a
-                plt.axvline(x=x_vert, color='blue', label=f"x = {x_vert:.2f}")
+                st.error(f"خطا در تبدیل به تابع: {str(e)}")
+        
+        elif eq_type == "implicit":
+            # Implicit plotting using contour
+            X, Y = np.meshgrid(np.linspace(-10, 10, 200), np.linspace(-10, 10, 200))
+            try:
+                func = sp.lambdify((self.x, self.y), sol, 'numpy')
+                Z = func(X, Y)
+                plt.contour(X, Y, Z, levels=[0], colors='b')
+                plt.title(f'{equation} = 0')
+            except Exception as e:
+                st.error(f"خطا در رسم معادله ضمنی: {str(e)}")
+                return info
+        
         ax = plt.gca()
-        ax.xaxis.set_major_locator(MultipleLocator(50))
-        ax.xaxis.set_minor_locator(MultipleLocator(10))
-        ax.yaxis.set_major_locator(MultipleLocator(50))
-        ax.yaxis.set_minor_locator(MultipleLocator(10))
-        plt.grid(which='major', linestyle='-', linewidth=0.75)
-        plt.grid(which='minor', linestyle=':', linewidth=0.5)
+        ax.xaxis.set_major_locator(plt.MultipleLocator(5))
+        ax.yaxis.set_major_locator(plt.MultipleLocator(5))
+        plt.grid(True, linestyle='--', linewidth=0.5)
         plt.xlabel('x')
         plt.ylabel('y')
-        plt.legend(fontsize='small')
+        if eq_type != "implicit":
+            plt.legend(fontsize='small')
         plt.title('نمودار معادله')
         plt.tight_layout()
-        return result[-1]
-    
+        return info
+
     def calculate_from_points(self, point1, point2):
         x1, y1 = point1
         x2, y2 = point2
         if x1 == x2:
             raise ValueError("مقادیر x نقاط نباید برابر باشند.")
         m = (y2 - y1) / (x2 - x1)
-        b = y1 - m*x1
+        b = y1 - m * x1
         return m, b
     
     def plot_line_from_points(self, m, b):
-        distance = abs(b) / sp.sqrt(m**2+1)
+        distance = abs(b) / sp.sqrt(m**2 + 1)
         distance = float(distance)
         x_vals = np.linspace(-20, 20, 400)
-        y_vals = m*x_vals+b
+        y_vals = m * x_vals + b
         plt.figure(figsize=(6, 4))
-        plt.plot(x_vals, y_vals, label=f'y = {m:.2f}x+{b:.2f}')
+        plt.plot(x_vals, y_vals, label=f'y = {m:.2f}x + {b:.2f}')
         plt.axhline(0, color='black', linewidth=0.5)
         plt.axvline(0, color='black', linewidth=0.5)
         plt.grid(True, linestyle='--', linewidth=0.5)
@@ -591,6 +599,7 @@ class LineAlgorithm:
         info = f"شیب = {m:.2f}، عرض = {b:.2f}، فاصله = {distance:.2f}"
         return info
 
+# Update the linear_equations_page to use the modified plotting
 def linear_equations_page():
     st.title("رسم چند خط و منحنی (معادلات خطی)")
     if "registered_lines" not in st.session_state:
@@ -700,14 +709,16 @@ def linear_equations_page():
         if not st.session_state.registered_lines:
             st.error("هیچ خطی ثبت نشده است.")
         else:
+            # تعریف صریح شکل و محور
             fig, ax = plt.subplots(figsize=(8, 6))
             x_vals = np.linspace(-20, 20, 400)
-            ax.yaxis.set_major_locator(MultipleLocator(50))
-            ax.yaxis.set_minor_locator(MultipleLocator(10))
-            plt.grid(which='major', linestyle='-', linewidth=0.75)
-            plt.grid(which='minor', linestyle=':', linewidth=0.5)
+            ax.xaxis.set_major_locator(MultipleLocator(15))
+            ax.yaxis.set_major_locator(MultipleLocator(15))
+            ax.grid(which='major', linestyle='-', linewidth=0.75)
+            ax.grid(which='minor', linestyle=':', linewidth=0.5)
             intersections = []
             letter_index = 0
+            
             for line in st.session_state.registered_lines:
                 if line.get("type", "linear") in ["general", "quadratic"]:
                     if line["type"] == "general":
@@ -715,20 +726,20 @@ def linear_equations_page():
                         b_coef = line["b_coef"]
                         c = line["c"]
                         if b_coef != 0:
-                            m_line = -a/b_coef
-                            intercept = -c/b_coef
+                            m_line = -a / b_coef
+                            intercept = -c / b_coef
                             y_vals = m_line * x_vals + intercept
                             ax.plot(x_vals, y_vals, label=f"{line['name']}: y = {m_line:.2f}x + {intercept:.2f}")
                         else:
-                            x_vert = -c/a
+                            x_vert = -c / a
                             ax.axvline(x=x_vert, color='blue', label=f"{line['name']}: x = {x_vert:.2f}")
                     else:
                         a = line["a"]
                         b_coef = line["b_coef"]
                         c = line["c"]
-                        func = sp.lambdify(calculator.x, a*calculator.x**2 + b_coef*calculator.x + c, 'numpy')
+                        func = sp.lambdify(calculator.x, a * calculator.x**2 + b_coef * calculator.x + c, 'numpy')
                         y_vals = func(x_vals)
-                        ax.plot(x_vals, y_vals, label=f"{line['name']}: {a}x²+{b_coef}x+{c}")
+                        ax.plot(x_vals, y_vals, label=f"{line['name']}: {a}x² + {b_coef}x + {c}")
                 else:
                     m_line = line.get("m", None)
                     b_line = line.get("b", None)
@@ -745,9 +756,11 @@ def linear_equations_page():
                     else:
                         y_vals = m_line * x_vals + b_line
                         ax.plot(x_vals, y_vals, label=f"{line['name']}: y = {m_line:.2f}x + {b_line:.2f}")
+            
+            # محاسبه تقاطع‌ها
             n = len(st.session_state.registered_lines)
             for i in range(n):
-                for j in range(i+1, n):
+                for j in range(i + 1, n):
                     line_i = st.session_state.registered_lines[i]
                     line_j = st.session_state.registered_lines[j]
                     if line_i.get("type", "linear") == "linear" and line_j.get("type", "linear") == "linear":
@@ -755,10 +768,10 @@ def linear_equations_page():
                         b1 = line_i["b"]
                         m2 = line_j["m"]
                         b2 = line_j["b"]
-                        if m1 is not None and m2 is not None and abs(m1-m2) > 1e-9:
-                            x_int = (b2-b1)/(m1-m2)
-                            y_int = m1*x_int+b1
-                            letter = chr(ord('a')+letter_index)
+                        if m1 is not None and m2 is not None and abs(m1 - m2) > 1e-9:
+                            x_int = (b2 - b1) / (m1 - m2)
+                            y_int = m1 * x_int + b1
+                            letter = chr(ord('a') + letter_index)
                             letter_index += 1
                             intersections.append({
                                 "letter": letter,
@@ -768,15 +781,18 @@ def linear_equations_page():
                                 "y": y_int
                             })
                             ax.plot(x_int, y_int, 'ro')
-                            ax.annotate(letter, (x_int, y_int), textcoords="offset points", xytext=(5,5),
+                            ax.annotate(letter, (x_int, y_int), textcoords="offset points", xytext=(5, 5),
                                         color='red', fontsize=10)
+            
+            # اضافه کردن خطوط محورها
             ax.axhline(0, color='black', linewidth=0.5)
             ax.axvline(0, color='black', linewidth=0.5)
             ax.set_xlabel("x")
             ax.set_ylabel("y")
-            ax.set_title("رسم همه خطوط و نقاط تقاطع")
             ax.legend(fontsize='small', loc='best')
             st.pyplot(fig)
+    
+    # بقیه کد (نمایش اطلاعات خطوط و حذف) بدون تغییر باقی می‌ماند
     st.markdown("---")
     st.subheader("اطلاعات خطوط ثبت‌شده")
     def delete_line(idx):
@@ -812,7 +828,7 @@ def linear_equations_page():
                     cols[6].write(line["a"])
                     cols[7].write(line["b_coef"])
                     cols[8].write(line["c"])
-                    delta = abs(line["c"]) / np.sqrt(line["a"]**2+line["b_coef"]**2) if (line["a"]**2+line["b_coef"]**2)!=0 else "-"
+                    delta = abs(line["c"]) / np.sqrt(line["a"]**2 + line["b_coef"]**2) if (line["a"]**2 + line["b_coef"]**2) != 0 else "-"
                     cols[9].write(f"{delta:.2f}" if delta != "-" else "-")
                 else:
                     cols[3].write("-")
@@ -826,7 +842,7 @@ def linear_equations_page():
                 cols[3].write(f"{line['m']:.2f}" if line.get("m") is not None else "-")
                 cols[4].write(f"{line['b']:.2f}" if line.get("b") is not None else "-")
                 if line.get("m") is not None and line.get("b") is not None:
-                    distance = abs(line['b']) / np.sqrt(line['m']**2+1)
+                    distance = abs(line['b']) / np.sqrt(line['m']**2 + 1)
                     cols[5].write(f"{distance:.2f}")
                 else:
                     cols[5].write("-")
