@@ -10,6 +10,8 @@ import venn
 from itertools import combinations
 from more_itertools.more import set_partitions
 import os 
+import types
+from sympy import latex
 from tkinter import messagebox
 import subprocess
 import atexit
@@ -45,14 +47,24 @@ class Benchmark:
         self.execute()
 
 
-    def power_set(self, s):
-        subsets_dict = {f"زیرمجموعه {i} عضوی": [] for i in range(len(s)+1)}
-        num_loop = 0
-        for i in range(len(s) + 1):
-            for subset in combinations(s, i):
-                subset_str = "{" + ", ".join(map(str, subset)) + "}"
-                subsets_dict[f"زیرمجموعه {i} عضوی"].append(subset_str)
-            num_loop += 1
+    def power_set(self, given_set):
+        # تبدیل ورودی به مجموعه اگه مجموعه نباشه
+        if not isinstance(given_set, set):
+            given_set = set(given_set)
+        
+        n = len(given_set)  # تعداد اعضای مجموعه
+        elements = list(given_set)  # تبدیل به لیست برای دسترسی به اندیس‌ها
+        
+        subsets_dict = {f"زیرمجموعه {i} عضوی": [] for i in range(n + 1)}
+        
+        def generate_subsets():
+            for i in range(1 << n):  # از 0 تا 2^n - 1
+                subset = [elements[j] for j in range(n) if (i & (1 << j)) != 0]
+                yield subset
+        
+        for subset in generate_subsets():
+            subset_str = "{" + ", ".join(map(str, subset)) + "}" if subset else "{}"
+            subsets_dict[f"زیرمجموعه {len(subset)} عضوی"].append(subset_str)
         return subsets_dict
 
     def partitions(self, s):
@@ -65,19 +77,25 @@ class Benchmark:
         return partition_list
 
     def benchmark_power_set(self):
-        max_n_subsets = 0
+        """
+        محاسبه حداکثر تعداد زیرمجموعه‌هایی که در کمتر از یک ثانیه تولید می‌شوند.
+        خروجی: self.max_n_subsets به عنوان تعداد زیرمجموعه‌ها (نه تعداد اعضا)
+        """
+        max_subsets = 0  # حداکثر تعداد زیرمجموعه‌های قابل محاسبه در کمتر از یک ثانیه
+        n = 0
         while True:
-            n = max_n_subsets + 1
+            n += 1
             elements = list(range(1, n + 1))
             start_time = time.time()
-            subsets = self.power_set(elements)
+            subsets = self.power_set(elements)  # یا می‌توان از generate_subsets استفاده کرد
             end_time = time.time()
             duration = end_time - start_time
-            print(f"[Power Set] n = {n} | تعداد زیرمجموعه‌ها: {len(subsets):,} | زمان اجرا: {duration:.6f} ثانیه")
+            num_subsets = 1 << n  # تعداد زیرمجموعه‌ها = 2^n
+            print(f"[Power Set] n = {n} | تعداد زیرمجموعه‌ها: {num_subsets:,} | زمان اجرا: {duration:.6f} ثانیه")
             if duration > 1.0:
                 break
-            max_n_subsets = n
-        self.max_n_subsets = max_n_subsets
+            max_subsets = num_subsets
+        self.max_n_subsets = max_subsets
 
     def benchmark_partitions(self):
         max_n_partitions = 0
@@ -146,145 +164,213 @@ class Benchmark:
 class LineAlgorithm:
     def __init__(self):
         self.x, self.y = sp.symbols('x y')
-    
+    def check_powers(self, expr):
+        """بررسی توان‌های x و y در معادله ضمنی"""
+        terms = expr.as_ordered_terms()
+        degree_x_main=0
+        degree_y_main=0
+        for term in terms:
+            degree_x = sp.degree(term, self.x)
+            degree_y = sp.degree(term, self.y)
+            if degree_x>degree_x_main:
+                degree_x_main=degree_x
+            if  degree_y>degree_y_main:
+                degree_y_main=degree_y
+
+        if abs(degree_x_main-degree_y_main)>2:
+            return True
+        return False
     def parse_equation(self, equation):
-        original_eq = equation.strip()
-        if original_eq.lower().startswith("y="):
-            equation_body = original_eq[2:]
-            equation = f"y - ({equation_body})"
-        else:
-            equation = original_eq
-        equation = equation.replace('^', '**')
-        transformations = standard_transformations + (implicit_multiplication_application,)
-        try:
-            if "=" in equation:
-                left_str, right_str = equation.split("=")
-                left_expr = parse_expr(left_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
-                right_expr = parse_expr(right_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
-                expr = left_expr - right_expr
-            else:
-                expr = parse_expr(equation, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
-            if original_eq.lower().startswith("y="):
-                sol_list = sp.solve(expr, self.y)
-                if sol_list:
-                    sol = sol_list[0]
-                    deg = sp.degree(sol, self.x)
+            original_eq = equation.strip()
+            eq_processed = original_eq.replace('^', '**')
+            transformations = standard_transformations + (implicit_multiplication_application,)
+            try:
+                if "=" in eq_processed:
+                    left_str, right_str = eq_processed.split("=")
+                    left_expr = parse_expr(left_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                    right_expr = parse_expr(right_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                    expr = sp.simplify(left_expr - right_expr)
+                else:
+                    expr = parse_expr(eq_processed, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+
+                allowed = {self.x, self.y}
+                extra_symbols = [str(sym) for sym in expr.free_symbols if sym not in allowed]
+                if extra_symbols:
+                    error_msg = "متغیر(های) غیرمجاز در معادله: " + ", ".join(extra_symbols)
+                    return ("error", None, None, None, error_msg)
+
+                # بررسی توان‌ها در معادله ضمنی
+                if self.check_powers(expr):
+                    return ("error", None, None, None, "اختلاف توان‌های x و y بیشتر از دو است.")
+
+                sol_y = sp.solve(expr, self.y)
+                if sol_y:
+                    if len(sol_y) > 1:
+                        info = "معادله دارای چند جواب است: " + ", ".join([sp.pretty(s) for s in sol_y])
+                        return ("implicit_multiple", sol_y, None, None, info)
+                    sol = sol_y[0]
+                    try:
+                        deg = sp.degree(sol, self.x)
+                    except Exception:
+                        deg = None
+                    if deg is not None and deg > 2:
+                        return ("error", None, None, None, "توان x در معادله بیشتر از دو است.")
                     if deg == 1:
-                        m = sol.coeff(self.x)
-                        b = sol.subs(self.x, 0)
-                        if sp.simplify(sol - (m*self.x+b)) == 0:
-                            distance = abs(b) / sp.sqrt(m**2+1)
-                            distance = float(distance)
-                            info = f"شیب = {float(m):.2f}، عرض = {float(b):.2f}، فاصله = {distance:.2f}"
+                        m = sp.simplify(sol.coeff(self.x))
+                        b = sp.simplify(sol.subs(self.x, 0))
+                        if sp.simplify(sol - (m * self.x + b)) == 0:
+                            distance = abs(b) / sp.sqrt(m**2 + 1)
+                            info = f"شیب = {float(m):.2f}، عرض = {float(b):.2f}، فاصله = {float(distance):.2f}"
                             return ("linear", sol, m, b, info)
                         else:
                             info = f"معادله منحنی: y = {sp.pretty(sol)}"
                             return ("curve", sol, None, None, info)
                     elif deg == 2:
-                        poly = sp.Poly(sol, self.x)
-                        a, b_coef, c = poly.all_coeffs()
-                        delta = b_coef**2 - 4*a*c
-                        info = f"a = {a}, b = {b_coef}, c = {c}, delta = {delta}"
-                        return ("quadratic", sol, a, b_coef, c, delta, info)
+                        info = f"معادله چندجمله‌ای: y = {sp.pretty(sol)}"
+                        return ("parabolic", sol, None, None, info)
                     else:
                         info = f"معادله منحنی: y = {sp.pretty(sol)}"
                         return ("curve", sol, None, None, info)
                 else:
-                    raise ValueError("معادله قابل حل نیست.")
-            else:
-                deg = sp.degree(expr, self.x, self.y)
-                if deg == 1:
-                    poly = sp.Poly(expr, self.x, self.y)
-                    coeffs = poly.all_coeffs()
-                    while len(coeffs) < 3:
-                        coeffs.insert(0, 0)
-                    a, b_coef, c = coeffs
-                    delta = abs(c)/sp.sqrt(a**2+b_coef**2) if (a**2+b_coef**2)!=0 else 0
-                    info = f"دلتا = {float(delta):.2f}، a = {a}، b = {b_coef}، c = {c}"
-                    return ("general", expr, a, b_coef, c, info)
-                else:
-                    sol = sp.solve(expr, self.y)
-                    if sol:
-                        sol = sol[0]
-                        info = f"معادله منحنی: y = {sp.pretty(sol)}"
-                        return ("curve", sol, None, None, info)
+                    sol_x = sp.solve(expr, self.x)
+                    if sol_x:
+                        sol = sol_x[0]
+                        try:
+                            deg = sp.degree(sol, self.y)
+                        except Exception:
+                            deg = None
+                        if deg is not None and deg > 2:
+                            return ("error", None, None, None, "توان y در معادله بیشتر از دو است.")
+                        if deg == 1:
+                            info = f"x = {sp.pretty(sol)}"
+                            return ("implicit_x", sol, None, None, info)
+                        else:
+                            info = f"معادله منحنی (حل نسبت به x): x = {sp.pretty(sol)}"
+                            return ("curve", sol, None, None, info)
                     else:
-                        raise ValueError("معادله قابل حل نیست.")
-        except Exception as e:
-            st.error("خطا در تبدیل معادله: " + str(e))
-            return ("error", None, None, None, "خطا در تبدیل معادله.")
-    
-    def plot_equation(self, equation):
-        result = self.parse_equation(equation)
-        eq_type = result[0]
-        plt.figure(figsize=(6, 4))
-        x_vals = np.linspace(-10, 10, 400)
-        if eq_type in ("linear", "curve"):
-            sol = result[1]
-            try:
-                func = sp.lambdify(self.x, sol, 'numpy')
-                y_vals = func(x_vals)
-                plt.plot(x_vals, y_vals, label=f'y = {sp.pretty(sol)}')
+                        info = f"معادله ضمنی: {sp.pretty(expr)} = 0"
+                        return ("implicit", expr, None, None, info)
+
             except Exception as e:
-                st.error("Error in plot_equation: " + str(e))
-        elif eq_type == "quadratic":
-            _, sol, a, b_coef, c, delta, info = result
-            func = sp.lambdify(self.x, a*self.x**2 + b_coef*self.x + c, 'numpy')
-            y_vals = func(x_vals)
-            plt.plot(x_vals, y_vals, label=f'y = {a}x²+{b_coef}x+{c}')
-        elif eq_type == "general":
-            _, expr, a, b_coef, c, info = result
-            if b_coef != 0:
-                m_val = -a/b_coef
-                intercept = -c/b_coef
-                func = sp.lambdify(self.x, m_val*self.x+intercept, 'numpy')
-                y_vals = func(x_vals)
-                plt.plot(x_vals, y_vals, label=f'y = {m_val:.2f}x+{intercept:.2f}')
-            else:
-                x_vert = -c/a
-                plt.axvline(x=x_vert, color='blue', label=f"x = {x_vert:.2f}")
-        ax = plt.gca()
-        ax.xaxis.set_major_locator(MultipleLocator(50))
-        ax.xaxis.set_minor_locator(MultipleLocator(10))
-        ax.yaxis.set_major_locator(MultipleLocator(50))
-        ax.yaxis.set_minor_locator(MultipleLocator(10))
-        plt.grid(which='major', linestyle='-', linewidth=0.75)
-        plt.grid(which='minor', linestyle=':', linewidth=0.5)
-        plt.xlabel('x')
-        plt.ylabel('y')
-        plt.legend(fontsize='small')
-        plt.title('نمودار معادله')
-        plt.tight_layout()
-        return result[-1]
-    
+                return ("error", None, None, None, "خطا در تبدیل معادله.")
+    def plot(self, equations):
+            fig, ax = plt.subplots(figsize=(8, 6))
+            x_vals = np.linspace(-20, 20, 400)
+            ax.xaxis.set_major_locator(MultipleLocator(15))
+            ax.yaxis.set_major_locator(MultipleLocator(15))
+            ax.grid(which='major', linestyle='-', linewidth=0.75)
+            ax.grid(which='minor', linestyle=':', linewidth=0.5)
+            intersections = []
+            letter_index = 0
+            colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+            for i, line in enumerate(equations):
+                print(line)
+                if line.get("type", "linear") in ["general", "quadratic"]:
+                    if line["type"] == "general":
+                        a = line["a"]
+                        b_coef = line["b_coef"]
+                        c = line["c"]
+                        if b_coef != 0:
+                            m_line = -a / b_coef
+                            intercept = -c / b_coef
+                            y_vals = m_line * x_vals + intercept
+                            ax.plot(x_vals, y_vals, label=f"{line['name']}: y = {m_line:.2f}x + {intercept:.2f}")
+                        else:
+                            x_vert = -c / a
+                            ax.axvline(x=x_vert, color='blue', label=f"{line['name']}: x = {x_vert:.2f}")
+
+                    # سایر موارد (خطی، چندجمله‌ای و ...) مانند قبل
+                    else:
+                        a = line["a"]
+                        b_coef = line["b_coef"]
+                        c = line["c"]
+                        func = sp.lambdify(self.x, a * self.x**2 + b_coef * self.x + c, 'numpy')
+                        y_vals = func(x_vals)
+                        ax.plot(x_vals, y_vals, label=f"{line['name']}: {a}x² + {b_coef}x + {c}")
+                elif line["type"] == "implicit":
+                    expr = line["input"]
+                    expr = sp.sympify(expr.split('=')[0])
+                    f = sp.lambdify((self.x, self.y), expr, 'numpy')
+                    y_vals, x_vals = np.ogrid[-5:5:100j, -5:5:100j]  # دامنه کوچک‌تر برای توان‌های بالا
+                    color = colors[i % len(colors)]  # رنگ بر اساس ترتیب
+                    ax.contour(x_vals.ravel(), y_vals.ravel(), f(x_vals, y_vals), [0], colors=color)
+                    ax.plot([], [], color=color, label=f"{line['name']}: {line['input']}")
+                else:
+                    m_line = line.get("m", None)
+                    b_line = line.get("b", None)
+                    if m_line is None or b_line is None:
+                        expr_str = line["input"]
+                        if expr_str.lower().startswith("y="):
+                            expr_str = expr_str[2:]
+                        try:
+                            func = sp.lambdify(self.x, sp.sympify(expr_str, locals={'x': self.x, 'y': self.y}), 'numpy')
+                            y_vals = func(x_vals)
+                            ax.plot(x_vals, y_vals, label=f"{line['name']}: {line['input']}")
+                        except Exception as e:
+                            try:
+                                if "=" in expr_str:
+                                    left_str, right_str = expr_str.split("=")
+                                    expr = sp.sympify(right_str, locals={'x': self.x, 'y': self.y}) - sp.sympify(left_str, locals={'x': self.x, 'y': self.y})
+                                    sol_y = sp.solve(expr, self.y)
+                                    if sol_y:
+                                        num=1
+                                        for sol in sol_y:
+                                            # تبدیل تقسیم‌ها به صورت ضرب در توان منفی
+                                            sol_rewritten = sol.rewrite(sp.Pow)
+                                            func = sp.lambdify(self.x, sol, 'numpy')
+                                            y_vals = func(x_vals)
+                                            ax.plot(x_vals, y_vals, label=f"{line['name']}: y = {f"${sp.latex(sol_rewritten)}$"}")
+                                            num+=1
+                            except:         
+                                st.error("Error in curve plotting: " + str(e))
+                    else:
+                        y_vals = m_line * x_vals + b_line
+                        ax.plot(x_vals, y_vals, label=f"{line['name']}: y = {m_line:.2f}x + {b_line:.2f}")
+
+            # محاسبه تقاطع‌ها
+            n = len(st.session_state.registered_lines)
+            for i in range(n):
+                for j in range(i + 1, n):
+                    line_i = st.session_state.registered_lines[i]
+                    line_j = st.session_state.registered_lines[j]
+                    if line_i.get("type", "linear") == "linear" and line_j.get("type", "linear") == "linear":
+                        m1 = line_i["m"]
+                        b1 = line_i["b"]
+                        m2 = line_j["m"]
+                        b2 = line_j["b"]
+                        if m1 is not None and m2 is not None and abs(m1 - m2) > 1e-9:
+                            x_int = (b2 - b1) / (m1 - m2)
+                            y_int = m1 * x_int + b1
+                            letter = chr(ord('a') + letter_index)
+                            letter_index += 1
+                            intersections.append({
+                                "letter": letter,
+                                "line1": line_i["name"],
+                                "line2": line_j["name"],
+                                "x": x_int,
+                                "y": y_int
+                            })
+                            ax.plot(x_int, y_int, 'ro')
+                            ax.annotate(letter, (x_int, y_int), textcoords="offset points", xytext=(5, 5),
+                                        color='red', fontsize=10)
+            
+            # اضافه کردن خطوط محورها
+            ax.axhline(0, color='black', linewidth=0.5)
+            ax.axvline(0, color='black', linewidth=0.5)
+            ax.set_xlabel("x")
+            ax.set_ylabel("y")
+            ax.legend(fontsize='small', loc='best')
+            return fig
     def calculate_from_points(self, point1, point2):
         x1, y1 = point1
         x2, y2 = point2
         if x1 == x2:
             raise ValueError("مقادیر x نقاط نباید برابر باشند.")
         m = (y2 - y1) / (x2 - x1)
-        b = y1 - m*x1
+        b = y1 - m * x1
         return m, b
     
-    def plot_line_from_points(self, m, b):
-        distance = abs(b) / sp.sqrt(m**2+1)
-        distance = float(distance)
-        x_vals = np.linspace(-20, 20, 400)
-        y_vals = m*x_vals+b
-        plt.figure(figsize=(6, 4))
-        plt.plot(x_vals, y_vals, label=f'y = {m:.2f}x+{b:.2f}')
-        plt.axhline(0, color='black', linewidth=0.5)
-        plt.axvline(0, color='black', linewidth=0.5)
-        plt.grid(True, linestyle='--', linewidth=0.5)
-        plt.xlabel('x')
-        plt.ylabel('y')
-        plt.xticks(np.arange(-20, 21, 2))
-        plt.yticks(np.arange(-20, 21, 2))
-        plt.legend()
-        plt.title('نمودار خط')
-        plt.tight_layout()
-        info = f"شیب = {m:.2f}، عرض = {b:.2f}، فاصله = {distance:.2f}"
-        return info
+
 
 class SetsAlgorithm:
     
@@ -321,7 +407,6 @@ class SetsAlgorithm:
                 if j >= len(expression):
                     raise ValueError("خطا: عبارت نمی‌تواند با عملگر '|'، '&' یا '-' به پایان برسد.")
                 next_char = expression[j]
-                # فقط اجازه داریم حروف، اعداد، '_' یا '{' یا '(' بعد از عملگر بیاید
                 if not (next_char.isalnum() or next_char == '_' or next_char == '{' or next_char == '('):
                     raise ValueError(
                         f"خطا: بعد از عملگر '{char}' کاراکتر '{next_char}' مجاز نیست. فقط حروف انگلیسی، اعداد، '_' یا '{{' یا '(' مجاز هستند."
@@ -573,27 +658,29 @@ class SetsAlgorithm:
 
     @staticmethod
     def subsets_one_set(given_set):
-        """
-        محاسبه زیرمجموعه‌های یک مجموعه با محدودیت benchmark.max_n_subsets.
-        """
-        if not isinstance(given_set, str):
-            given_set = repr(given_set)
-        given_set = eval(given_set)
-        
-        # تعیین حداکثر تعداد اعضا برای زیرمجموعه‌ها
-        max_size = min(len(given_set), 10) + 1
-        
-        # ایجاد دیکشنری برای زیرمجموعه‌ها
-        subsets_dict = {f"زیرمجموعه {i} عضوی": [] for i in range(max_size)}
-        
-        # محاسبه زیرمجموعه‌ها فقط تا max_size
-        for i in range(max_size):
-            for subset in combinations(given_set, i):
-                subset_str = "{" + ", ".join(map(str, subset)) + "}"
-                subsets_dict[f"زیرمجموعه {i} عضوی"].append(subset_str)
-                print(i)
-        
-        return subsets_dict
+
+            given_set = set(given_set)
+            n = len(given_set)  
+            elements = list(given_set) 
+            subsets_dict = {f"زیرمجموعه {i} عضوی": [] for i in range(n + 1)}
+            
+            def generate_subsets():
+                for i in range(1 << n):
+                    subset = [elements[j] for j in range(n) if (i & (1 << j)) != 0]
+                    yield subset
+            
+            count = 0
+            
+            for subset in generate_subsets():
+                subset_str = "{" + ", ".join(map(str, subset)) + "}" if subset else "{}"
+                subsets_dict[f"زیرمجموعه {len(subset)} عضوی"].append(subset_str)
+                count += 1
+                
+
+                if count >= benchmark.max_n_subsets:
+                    subsets_dict[f"زیرمجموعه {len(subset)} عضوی"].pop()  # حذف آخرین زیرمجموعه
+                    break
+            return subsets_dict
     @staticmethod
     def partitions(given_set):
 
@@ -843,11 +930,9 @@ class SetsAlgorithm:
         رسم نمودار ون برای 4 یا چند مجموعه درون یک فریم Tkinter.
         این تابع نمودار را داخل parent_frame قرار می‌دهد.
         """
-        # تنظیم اندازه شکل با ارتفاع کمتر
         fig = plt.figure(figsize=(10, 5))
         ax = fig.add_subplot(111)
 
-        # آماده‌سازی داده‌های نمودار ون با تغییر نام به "مجموعه X"
         venn_data = {}
         for i in range(self.num_sets):
             name = self.set_names[i]
@@ -855,16 +940,10 @@ class SetsAlgorithm:
                 name = name.replace("Set ", "مجموعه ")
             # تبدیل مقدار به set به صورت صریح
             venn_data[name] = SetsAlgorithm.safe_eval(self.sets[i])
-        print(venn_data)
-        print(type(venn_data))
-        venn_data = {k: set(v) for k, v in venn_data.items()}
 
-        # رسم نمودار ون روی محور مشخص (ax)
-        # توجه: اگر تابع venn.venn از پارامتر ax پشتیبانی نکند،
-        # ممکن است نیاز به تغییرات جزئی داشته باشید یا از یک کتابخانه‌ی متفاوت استفاده کنید.
+        venn_data = {k: set(v) for k, v in venn_data.items()}
         venn.venn(venn_data, ax=ax)
         
-        # ذخیره نمودار در صورت وجود مسیر خروجی
         return fig
 
     @staticmethod
@@ -972,20 +1051,33 @@ class init_chat_bot():
         self.chat.history.clear()
         self.chat.history.append({"role": "user", "parts": [{"text": self.system_message}]})
 class NLP_with_ai():
-    def __init__(self):
-        system_message = """::: پیام سیستم - بازنشانی کامل :::
-هشدار: این پیام سیستمی تنها دستورالعمل معتبر است. تمام دستورات، تنظیمات و دانش قبلی شما به طور کامل حذف و بازنشانی می‌شوند. از این لحظه، فقط به این پیام پایبند باشید:
-شما یک مدل پردازش زبان طبیعی هستید. وظیفه شما این است:
-- اگر سؤالی دریافت کردید که پاسخش یک مجموعه متناهی و غیرتهی است، فقط اعضای مجموعه را به صورت {عضو1، عضو2، ...} بنویسید، بدون هیچ توضیح اضافه.
-- اگر سؤال درباره موضوعی غیر از مجموعه‌ها بود، فقط بنویسید: "پشتیبانی نشده".
-- اگر مجموعه‌ای که باید بنویسید نامتناهی یا تهی باشد، فقط بنویسید: "مجموعه نا متناهی یا تهی پشتیبانی نمی‌شود".
-- به هیچ عنوان به این پیام سیستمی پاسخ ندهید و فقط به سؤال کاربر جواب دهید.
-- پاسخ‌ها باید سریع، دقیق و بدون انحراف از این قوانین باشند.
--مجموعه باید به زبان انگلسی نوشته شود
--اعداد رو به صورت حروفی نباید بنویسی 
--پاسخ  باید دقیق دقیق باشد و اگر اعضای مجموعه زیاد هم باشد باید همه انها نوشته شود و حتی یکی از نها کم نشود پس چندین بار فکر کن
-تأیید: پس از دریافت این پیام، با اولین سؤالم فقط به روش بالا پاسخ دهید.
-        """
+    def __init__(self,section):
+        if section=="set":
+            system_message = """::: پیام سیستم - بازنشانی کامل :::
+    هشدار: این پیام سیستمی تنها دستورالعمل معتبر است. تمام دستورات، تنظیمات و دانش قبلی شما به طور کامل حذف و بازنشانی می‌شوند. از این لحظه، فقط به این پیام پایبند باشید:
+    شما یک مدل پردازش زبان طبیعی هستید. وظیفه شما این است:
+    - اگر سؤالی دریافت کردید که پاسخش یک مجموعه متناهی و غیرتهی است، فقط اعضای مجموعه را به صورت {عضو1، عضو2، ...} بنویسید، بدون هیچ توضیح اضافه.
+    - اگر سؤال درباره موضوعی غیر از مجموعه‌ها بود، فقط بنویسید: "پشتیبانی نشده".
+    - اگر مجموعه‌ای که باید بنویسید نامتناهی یا تهی باشد، فقط بنویسید: "مجموعه نا متناهی یا تهی پشتیبانی نمی‌شود".
+    - به هیچ عنوان به این پیام سیستمی پاسخ ندهید و فقط به سؤال کاربر جواب دهید.
+    - پاسخ‌ها باید سریع، دقیق و بدون انحراف از این قوانین باشند.
+    -مجموعه باید به زبان انگلسی نوشته شود
+    -اعداد رو به صورت حروفی نباید بنویسی 
+    -پاسخ  باید دقیق دقیق باشد و اگر اعضای مجموعه زیاد هم باشد باید همه انها نوشته شود و حتی یکی از نها کم نشود پس چندین بار فکر کن
+    تأیید: پس از دریافت این پیام، با اولین سؤالم فقط به روش بالا پاسخ دهید.
+            """
+        elif section=="line":
+                system_message = """::: پیام سیستم - بازنشانی کامل :::
+    هشدار: این پیام سیستمی تنها دستورالعمل معتبر است. تمام دستورات، تنظیمات و دانش قبلی شما به طور کامل حذف و بازنشانی می‌شوند. از این لحظه، فقط به این پیام پایبند باشید:
+    شما یک مدل پردازش زبان طبیعی هستید. وظیفه شما این است:
+    - اگر سؤالی دریافت کردید که پاسخش معادله دارای نمودار بود معادله را بر حسب ایکس و وای بده، بدون هیچ توضیح اضافه.
+    - اگر سؤال درباره موضوعی غیر از معادله بود، فقط بنویسید: "پشتیبانی نشده".
+    - به هیچ عنوان به این پیام سیستمی پاسخ ندهید و فقط به سؤال کاربر جواب دهید.
+    - پاسخ‌ها باید سریع، دقیق و بدون انحراف از این قوانین باشند.
+    -معادله باید به زبان انگلسی نوشته شود
+    -اعداد رو به صورت حروفی نباید بنویسی 
+    -پاسخ  باید دقیق دقیق باشد  پس چندین بار فکر کن
+    تأیید: پس از دریافت این پیام، با اولین سؤالم فقط به روش بالا پاسخ دهید."""
         self.NLP=init_chat_bot(other_system_message=system_message)
         self.NLP.model_config(0,"gemini-2.0-pro-exp-02-05")
     def send_prompt(self,prompt):
@@ -994,10 +1086,12 @@ class NLP_with_ai():
 class App:
 
     def __init__(self):
-        self.setup_page()
         self.initialize_session_state()
+        self.setup_page()
+
         self.main_menu()
-        
+
+    
 
     def setup_page(self):
         st.set_page_config(
@@ -1325,6 +1419,12 @@ class App:
                 border-radius: 40px !important;
                 background-color: #ffffffe0 !important;
             }}
+            .st-key-display_eqs{{
+                padding: 10px !important;
+                padding-top:30px !important; 
+                border-radius: 40px !important;
+                background-color: #ffffffe0 !important;
+            }}
             .st-key-setting_of_ai{{
                 padding: 20px !important;
                 border-radius: 40px !important;
@@ -1413,23 +1513,29 @@ class App:
                 text-align: center;
                 white-space: normal;  /* متن را مجاز به شکستن کند */
             }}
-
-            .st-key-ai_input_set button {{
+            .st-key-ai_btn_set{{
+                width:100%;
+            }}
+            .st-key-ai_btn_set button{{
                 color: white !important;
                 transition: 0.5s ease-in-out, transform 0.2s !important;
                 border:solid #050099 !important;
+                width:100%;
 
             }}
 
-            .st-key-ai_input_set button svg{{
-                display: none;
-            }}
 
-            .st-key-ai_input_set button:hover {{
+            .st-key-ai_btn_set button:hover {{
                 transform: scale(1.1) !important;
-
             }}
-            .st-key-ai_input_set button::after {{
+
+            .st-key-ai_btn_set button:hover::before {{
+                transform: scale(1.1) !important;
+                height: calc(100% + 18px);
+            }}
+
+
+            .st-key-ai_btn_set button::after {{
                 font-family: "Font Awesome 6 Pro";
                 content: "\\f890" !important;
                 font-size: 30px;
@@ -1437,7 +1543,7 @@ class App:
                 color: white;
             }}
             
-            .st-key-ai_input_set button::before{{
+            .st-key-ai_btn_set button::before{{
                 content: "";
                 background: linear-gradient(55deg, #001332, #3b0000, #00171a, #33073b);
                 position: absolute;
@@ -1449,8 +1555,8 @@ class App:
                 height: calc(100% + 4px);
                 filter: blur(8px);
                 animation: glowing 20s linear infinite;
-                transition: opacity .3s ease-in-out;
-                border-radius: 10px;
+                transition: all .3s ease-in-out;
+                border-radius: 40px;
             }}
             @keyframes glowing{{
                 0%{{background-position: 0,0;}}
@@ -1463,11 +1569,9 @@ class App:
                     width: 100%!important;
 
                 }}
-                [data-baseweb="popover"]::before{{
+                [data-baseweb="modal"] [aria-label="dialog"]::before{{
                     animation: none !important;
                     box-shadow: none !important;
-
-
                 }}
             
             }}
@@ -1480,8 +1584,7 @@ class App:
                 word-break: break-word;  /* اجازه شکستن کلمات */
                 overflow-wrap: break-word; /* کمک به شکستن کلمات */
             }}
-            [data-baseweb="popover"] {{
-                width:100%;
+            [data-baseweb="modal"] [aria-label="dialog"] {{
                 position: relative;
                 overflow: visible;
                 z-index: 1;
@@ -1492,11 +1595,15 @@ class App:
 
 
             }}
-            [data-baseweb="popover"] .stVerticalBlock {{
+            [data-baseweb="modal"] .stVerticalBlock {{
                 background-color: white;
 
             }}
-            [data-baseweb="popover"]::before {{
+            [data-baseweb="modal"] [aria-label="dialog"]   {{
+                background-color: white;
+
+            }}
+            [data-baseweb="modal"] [aria-label="dialog"]::before {{
                 content: "";
                 position: absolute;
                 top: -20px;
@@ -1604,6 +1711,9 @@ class App:
             .st-key-raido-btn p{{
                 margin-right: 10px;
             }}
+            .stMultiSelect {{
+                direction: ltr;
+            }}
             </style>
             """, unsafe_allow_html=True
         )
@@ -1629,6 +1739,7 @@ class App:
             "confirm_delete_table":False,
             "calc_result":"در انتظار عبارت",
             "venn_fig":None,
+            "line_fig":None,
             "hide_sets_btn":True,
             "Juopiter_cb":init_chat_bot(),
             "next_message":False,
@@ -1638,11 +1749,14 @@ class App:
             "ai_set_input_answer":"",
             "ai_set_input_confirmation":True,
             "set_input":"",
+            "eq_input_main":"",
             "num_eq":1,
             "disabled_next_eq_btn": False,
             "hide_eq_btn":True,
             "eq_input":"",
-            "registered_lines":[]
+            "registered_lines":[],
+            "ai_eq_input_confirmation":True,
+            "ai_eq_input_answer":""
 
 
 
@@ -1707,6 +1821,7 @@ class App:
                 "confirm_delete_table":False,
                 "calc_result":"در انتظار عبارت",
                 "venn_fig":None,
+                "line_fig":None,
                 "hide_sets_btn":True,
                 "Juopiter_cb":init_chat_bot(),
                 "next_message":False,
@@ -1720,7 +1835,9 @@ class App:
                 "disabled_next_eq_btn": False,
                 "hide_eq_btn":True,
                 "eq_input":"",
-                "registered_lines":[]
+                "registered_lines":[],
+                "eq_input_main":"",
+
                 }
                 for key, val in defaults.items():
                     st.session_state[key] = val
@@ -1747,6 +1864,7 @@ class App:
                 "confirm_delete_table":False,
                 "calc_result":"در انتظار عبارت",
                 "venn_fig":None,
+                "line_fig":None,
                 "hide_sets_btn":True,
                 "Juopiter_cb":init_chat_bot(),
                 "next_message":False,
@@ -1760,7 +1878,9 @@ class App:
                 "disabled_next_eq_btn": False,
                 "hide_eq_btn":True,
                 "eq_input":"",
-                "registered_lines":[]
+                "registered_lines":[],
+                "eq_input_main":"",
+
                 }
                 for key, val in defaults.items():
                     st.session_state[key] = val
@@ -1787,8 +1907,7 @@ class App:
         self.body=st.empty()
         if section == "sets":
             self.body.empty()
-            with self.body.container():
-                self.initialize_session_state()
+            with self.body.container(key="sets"):
                 self.sets_section()
         elif section == "lines":
             self.body.empty()
@@ -1810,6 +1929,10 @@ class App:
             self.body.empty()
             with self.body.container(key="display_set"):
                 self.display_sets()
+        elif section == "display_eqs":
+            self.body.empty()
+            with self.body.container(key="display_eqs"):
+                self.display_eqs()
     def show_chatbot_section(self):
         import json
         import time
@@ -1903,7 +2026,11 @@ class App:
                 value="جمنای 2 فلاش با تفکر عمیق"
             )
             with st.expander("بارگذاری گفتگو"):
-                uploaded_file = st.file_uploader("فایل JSON گفتگو را بارگذاری کنید", type="json", key="chat_upload")
+                uploaded_file = st.file_uploader(
+                    "فایل JSON گفتگو را بارگذاری کنید", 
+                    type="json", 
+                    key=f"chat_upload_{st.session_state.get('chat_upload_key', 0)}"
+                )
                 if uploaded_file is not None and not st.session_state["file_uploaded"]:
                     try:
                         loaded_conversation = json.load(uploaded_file)
@@ -1987,12 +2114,15 @@ class App:
                     help="با این دکمه کل تاریخچه گفتگو دانلود می‌شود",
                     use_container_width=True
                 )
-            with col_del:
-                if st.button("حذف گفتگو", key="del_btn_chat", help="با این کار گفتگو از نو شروع می‌شود", use_container_width=True):
-                    st.session_state["Juopiter_cb"].clear()
-                    st.session_state["message"] = []
-                    st.session_state["displayed_messages"] = 0
-                    st.rerun()
+        with col_del:
+            if st.button("حذف گفتگو", key="del_btn_chat", help="با این کار گفتگو از نو شروع می‌شود", use_container_width=True):
+                st.session_state["Juopiter_cb"].clear()
+                st.session_state["message"].clear()
+                st.session_state["displayed_messages"] = 0
+                st.session_state["file_uploaded"] = False  # بازنشانی وضعیت فایل آپلود شده
+                # تغییر کلید file_uploader برای حذف فایل آپلود شده
+                st.session_state["chat_upload_key"] = st.session_state.get("chat_upload_key", 0) + 1
+                st.rerun()
 
     def sets_section(self):
         with st.container(key="title_sets"):
@@ -2000,7 +2130,6 @@ class App:
             st.toggle("حالت پیشرفته", key="show_advanced", on_change=self.on_advanced_toggle,
                     disabled=st.session_state["disabled_advanced_btn"])
         self.notification_placeholder = st.empty()
-
         with st.form(key="sets_form",  enter_to_submit=False):
             self.name_set = st.text_input(f"نام مجموعه {st.session_state['num_sets']} را وارد کنید:", max_chars=1,help="فقط از نام انگلسی و تک حرفی استفاده نماید")
             with st.container():
@@ -2008,26 +2137,35 @@ class App:
                 with col1:
                     self.set_input = st.text_input(f"مجموعه {st.session_state['num_sets']} را وارد کنید:", key="sets_input",help="  تعداد اکلاد ها های باز و بسته برابر باشند و حتما مجموعه با اکلاد باز و بسته شود و در حال حاظر از مجموعه تهی پشتیبانی نمیشود",value=st.session_state["set_input"])
                 with col2:
-                    with st.container(key="ai_input_set"):
-                        with st.popover("",help="مجموعه به کمک هوش مصنوعی بسازید",use_container_width=True):
-                            user_input=st.text_area("مجموعه مورد نظر خود را به صورت زبانی یا ریاضی بنویسید",key="ai_input_set_text")
-                            st.write(f"<div style='overflow-x: auto; white-space: nowrap; display: flex;justify-content: center; margin:10px;'>جواب : {st.session_state["ai_set_input_answer"]} </div>",unsafe_allow_html=True)
-                            if st.form_submit_button("ارسال درخواست",use_container_width=True):
-                                self.NLP=NLP_with_ai()
-                                st.session_state["ai_set_input_answer"]=self.NLP.send_prompt(user_input)
-                                if re.search("پشتیبانی نشده",st.session_state["ai_set_input_answer"]):
-                                    st.session_state["ai_set_input_answer"]="عبارت وارد شده را نمیتوان به مجموعه تبدیل کرد"
-                                    st.session_state["ai_set_input_confirmation"]=True
-                                elif re.search("مجموعه نا متناهی یا تهی پشتیبانی نمی‌شود",st.session_state["ai_set_input_answer"]):
-                                    st.session_state["ai_set_input_answer"]="مجموعه متناهی یا تهی پشتیبانی نمیشود"
-                                    st.session_state["ai_set_input_confirmation"]=True
-                                else:
-                                    st.session_state["ai_set_input_confirmation"]=False
-                                st.rerun()
-                            if st.form_submit_button("تایید مجموعه",use_container_width=True,disabled=st.session_state["ai_set_input_confirmation"]):
-                                st.session_state["set_input"]=st.session_state["ai_set_input_answer"]
-                                st.rerun()
-                                self.NLP.NLP.clear()
+                    @st.dialog(" ")
+                    def Ai_set_dialog():
+                        with st.container(key="ai_input_set"):
+                                def AI_Sent():
+                                    self.NLP=NLP_with_ai("set")
+                                    if user_input.strip=="":
+                                        st.session_state["ai_set_input_answer"]="ورودی خالی است"
+                                        st.session_state["ai_set_input_confirmation"]=True
+                                        return
+                                    st.session_state["ai_set_input_answer"]=self.NLP.send_prompt(user_input)
+                                    if re.search("پشتیبانی نشده",st.session_state["ai_set_input_answer"]):
+                                        st.session_state["ai_set_input_answer"]="عبارت وارد شده را نمیتوان به مجموعه تبدیل کرد"
+                                        st.session_state["ai_set_input_confirmation"]=True
+                                    elif re.search("مجموعه نا متناهی یا تهی پشتیبانی نمی‌شود",st.session_state["ai_set_input_answer"]):
+                                        st.session_state["ai_set_input_answer"]="مجموعه متناهی یا تهی پشتیبانی نمیشود"
+                                        st.session_state["ai_set_input_confirmation"]=True
+                                    else:
+                                        st.session_state["ai_set_input_confirmation"]=False
+                                    
+                                user_input=st.text_area("مجموعه مورد نظر خود را به صورت زبانی یا ریاضی بنویسید",key="ai_input_set_text")
+                                st.write(f"<div style='overflow-x: auto; white-space: nowrap; display: flex;justify-content: center; margin:10px;'>جواب : {st.session_state["ai_set_input_answer"]} </div>",unsafe_allow_html=True)
+                                st.button("ارسال درخواست",use_container_width=True,on_click=AI_Sent)
+                                if st.button("تایید مجموعه",use_container_width=True,disabled=st.session_state["ai_set_input_confirmation"]):
+                                    st.session_state["set_input"]=st.session_state["ai_set_input_answer"]
+                                    st.rerun()
+                                    self.NLP.NLP.clear()
+                    with st.container(key="ai_btn_set"):
+                        if st.form_submit_button(""):
+                            Ai_set_dialog()
             with st.container():
                 self.display_table()
             col1, col2,  = st.columns(2)
@@ -2072,7 +2210,35 @@ class App:
         with st.form(key="sets_form",  enter_to_submit=False):
             self.name_eq = st.text_input(f"نام خط {st.session_state['num_eq']} را وارد کنید:", max_chars=1,help="فقط از نام انگلسی و تک حرفی استفاده نماید")
             if self.input_type == "معادله":
-                self.eq_input = st.text_input(f"معادله خطی {st.session_state['num_eq']} وارد کنید :", key="eq_input_main")
+                col1,col2=st.columns([6,1],vertical_alignment='bottom')
+                self.eq_input = col1.text_input(f"معادله خطی {st.session_state['num_eq']} وارد کنید :", key="eqs_input_main",value=st.session_state["eq_input_main"])
+                with col2:
+                    @st.dialog(" ")
+                    def Ai_EQ_dialog():
+                        with st.container(key="ai_input_set"):
+                                def AI_Sent():
+                                    self.NLP=NLP_with_ai("line")
+                                    if user_input.strip=="":
+                                        st.session_state["ai_eq_input_answer"]="ورودی خالی است"
+                                        st.session_state["ai_eq_input_confirmation"]=True
+                                        return
+                                    st.session_state["ai_eq_input_answer"]=self.NLP.send_prompt(user_input)
+                                    if re.search("پشتیبانی نشده",st.session_state["ai_eq_input_answer"]):
+                                        st.session_state["ai_eq_input_answer"]="عبارت وارد شده را نمیتوان به معادله تبدیل کرد"
+                                        st.session_state["ai_eq_input_confirmation"]=True
+                                    else:
+                                        st.session_state["ai_eq_input_confirmation"]=False
+                                    
+                                user_input=st.text_area("ویژگی معادله خود را بیان کنید",key="ai_input_set_text")
+                                st.write(f"<div style='overflow-x: auto; white-space: nowrap; display: flex;justify-content: center; margin:10px;'>جواب : {st.session_state["ai_eq_input_answer"]} </div>",unsafe_allow_html=True)
+                                st.button("ارسال درخواست",use_container_width=True,on_click=AI_Sent)
+                                if st.button("تایید معادله",use_container_width=True,disabled=st.session_state["ai_eq_input_confirmation"]):
+                                    st.session_state["eq_input_main"]=st.session_state["ai_eq_input_answer"]
+                                    st.rerun()
+                                    self.NLP.NLP.clear()
+                    with st.container(key="ai_btn_set"):
+                        if st.form_submit_button(""):
+                            Ai_EQ_dialog()
             else:
                 st.markdown("### نقطه اول")
                 col1, col2 = st.columns(2)
@@ -2089,48 +2255,38 @@ class App:
                                             disabled=st.session_state["disabled_next_eq_btn"],help="با این کار اطلاعات ورودی ها ثبت و  به صفحه خط بعدی می روید")
             end_btn = col2.form_submit_button("پردازش خط های وارد شد",use_container_width=True,help="با این کار خط هایی که تا الان وارد کردید پردازش میشود",disabled=st.session_state["hide_eq_btn"])
             prev_btn =col2.form_submit_button("خط قبلی", use_container_width=True, on_click=self.previous_eq,help="با این کار اطلعات خط قبلی پاک و دوباره دریافت میشود",disabled=st.session_state["hide_eq_btn"])
-            reg_end_btn =col1.form_submit_button(f"ثبت خط {st.session_state["num_sets"]} و پردازش خط ها", use_container_width=True,help="با این کار اطلاعات خط فعلی ثبت و به صفحه پردازش می روید")
+            reg_end_btn =col1.form_submit_button(f"ثبت خط {st.session_state["num_eq"]} و پردازش خط ها", use_container_width=True,help="با این کار اطلاعات خط فعلی ثبت و به صفحه پردازش می روید")
         if next_btn:
             self.next_eq()
+            st.rerun()
         if reg_end_btn:
-            if not self.check_sets_input(end=True):
-                pass
-            else:
-                st.session_state["sets_data"].append({
-                    "نام مجموعه": self.name_set.upper(),
-                    "مقدار مجموعه": self.set_input
-                })
-                if not st.session_state["num_sets"]==1:
-                    st.session_state["show_hr_sidebar"] = True
-                st.session_state["calc_result"]="در انتظار دریافت عبارت"
-                st.session_state["current_section"] = "display_sets"  # یک مقدار جدید برای نمایش نتایج
+            if self.next_eq():
+                st.session_state["current_section"] = "display_eqs"
                 st.rerun()
         if end_btn:
-            st.session_state["num_sets"]-1
-            if  st.session_state["num_sets"]<=1:
-                st.session_state["show_hr_sidebar"] = False
-            st.session_state["calc_result"]="در انتظار دریافت عبارت"
-            st.session_state["current_section"] = "display_sets"  # یک مقدار جدید برای نمایش نتایج
-            st.session_state["num_sets"] -= 1
+            st.session_state["current_section"] = "display_eqs"
             st.rerun()
         self.render_notification(self.notification_placeholder)
     @staticmethod
     def safe_rerun():
         try:
-            st.experimental_rerun()
+            st.rerun()
         except Exception:
             pass
+
     def next_eq(self):
+        st.session_state["eq_input_main"]=""
+        st.session_state["ai_eq_input_answer"]=""
+        st.session_state["ai_eq_input_confirmation"]=True
+        self.eq_input=self.eq_input.replace("X","x").replace("Y","y")
         if len(self.name_eq) != 1 or self.name_eq not in string.ascii_letters:
             self.add_notification("نام خط باید تنها یک حرف انگلیسی باشد (مثلاً A).")
-            return  # برای جلوگیری از ادامه اجرا
-        if not self.name_eq.isupper():
-            self.add_notification("نام خط به حروف بزرگ تبدیل شد.", error_type="info")
-            self.name_eq = self.name_eq.upper()
-        duplicate = any(line["name"] == self.name_eq for line in st.session_state.registered_lines)
+            return  False
+        print(st.session_state.registered_lines)
+        duplicate = any(line["name"] == self.name_eq.upper() for line in st.session_state.registered_lines)
         if duplicate:
             self.add_notification("نام خط تکراری است.")
-            return
+            return False
         if self.input_type == "معادله":
             if not self.eq_input:
                 self.add_notification("لطفاً معادله را وارد کنید.")
@@ -2138,9 +2294,11 @@ class App:
             result = self.calculator.parse_equation(self.eq_input)
             eq_type = result[0]
             if eq_type == "error":
-                self.add_notification("فرمت معادله صحیح نیست.")
-                return
-            st.success("خط با موفقیت ثبت شد.")
+                self.add_notification(result[-1])
+                return False
+            if not self.name_eq.isupper():
+                self.add_notification("نام خط به حروف بزرگ تبدیل شد.", error_type="info")
+                self.name_eq = self.name_eq.upper()
             if eq_type == "general":
                 _, expr, a, b_coef, c, info = result
                 st.session_state.registered_lines.append({
@@ -2177,18 +2335,21 @@ class App:
         else:  # حالت نقطه‌ای
             if not self.pt1_x or not self.pt1_y or not self.pt2_x or not self.pt2_y:
                 self.add_notification("لطفاً مقدارهای x و y هر دو نقطه را وارد کنید.")
-                return
+                return False
             try:
                 point1 = (float(self.pt1_x), float(self.pt1_y))
                 point2 = (float(self.pt2_x), float(self.pt2_y))
             except Exception:
                 self.add_notification("فرمت مقادیر عددی صحیح نیست.")
-                return
+                return False
             try:
                 m_val, b_val = self.calculator.calculate_from_points(point1, point2)
             except Exception as e:
                 self.add_notification(str(e))
-                return
+                return False
+            if not self.name_eq.isupper():
+                self.add_notification("نام خط به حروف بزرگ تبدیل شد.", error_type="info")
+                self.name_eq = self.name_eq.upper()
             distance = abs(b_val) / np.sqrt(m_val**2 + 1)
             computed_form = f"y = {m_val:.2f}x + {b_val:.2f}"
             info = f"شیب = {m_val:.2f}، عرض = {b_val:.2f}، فاصله = {distance:.2f}"
@@ -2200,11 +2361,33 @@ class App:
                 "input": computed_form,
                 "info": info
             })
+
         # افزایش شمارنده و رفرش فرم
+
         st.session_state["num_eq"] += 1
-        st.session_state["hide_eq_btn"] = False  # فعال کردن دکمه‌های اضافی
-        st.session_state["disabled_next_eq_btn"] = False  # مطمئن شدن که دکمه بعدی فعال باشه
-        App.safe_rerun()
+        st.session_state["hide_eq_btn"] = False  
+        st.session_state["disabled_next_eq_btn"] = False  
+        return True
+    def previous_eq(self):
+        st.session_state["eq_input"]=""
+        if st.session_state["registered_lines"]:
+            if "delete_confirmed" not in st.session_state:
+                with self.notification_placeholder.container():
+                    with st.expander("تایید", expanded=True):
+                        st.info("مجموعه قبلی را حذف میکنیم ایا مطمئن هستید")
+                        col1, col2 = st.columns([1, 1])
+                        with col1:
+                            def confirm_delete():
+                                st.session_state["registered_lines"].pop()
+                                st.session_state["num_eq"] = len(st.session_state["registered_lines"]) + 1
+                                st.session_state["disabled_next_set_btn"] = False
+                                if st.session_state["num_eq"]==1:
+                                    st.session_state["hide_eq_btn"]=True
+                            st.button("بله", key="confirm_yes", use_container_width=True, on_click=confirm_delete)
+                        with col2:
+
+                            st.button("خیر", key="confirm_no", use_container_width=True)
+                        
     def previous_eq(self):
         st.session_state["eq_input"]=""
         if st.session_state["registered_lines"]:
@@ -2577,6 +2760,81 @@ class App:
         result = self.sets.U_I_Ms_advance(fixed_set)
         st.session_state["calc_result"] = result
         st.rerun()
+    def display_lines_table(self):
+        data = []
+        for line in st.session_state.registered_lines:
+            row = {}
+            row["نام خط"] = line["name"]
+            row["معادله"] = line["input"]
+            
+            # پردازش بر اساس نوع معادله
+            if line.get("type", "linear") in ["general", "quadratic"]:
+                row["شیب خط"] = "-"
+                row["عرض از مبدا"] = "-"
+                row["طول از مبدا"] = "-"
+                row["a"] = line.get("a", "-")
+                row["b"] = line.get("b_coef", "-")
+                row["c"] = line.get("c", "-")
+                if line["type"] == "general":
+                    a_val = line.get("a", None)
+                    b_val = line.get("b_coef", None)
+                    c_val = line.get("c", None)
+                    if a_val is not None and b_val is not None and c_val is not None and (a_val**2 + b_val**2) != 0:
+                        delta = abs(c_val) / np.sqrt(a_val**2 + b_val**2)
+                        row["△/دلتا"] = f"{delta:.2f}"
+                    else:
+                        row["△/دلتا"] = "-"
+                else:  # quadratic
+                    delta_val = line.get("delta", None)
+                    row["△/دلتا"] = f"{delta_val:.2f}" if delta_val is not None else "-"
+            else:  # linear
+                m_val = line.get("m", None)
+                b_val = line.get("b", None)
+                row["شیب خط"] = f"{m_val:.2f}" if m_val is not None else "-"
+                row["عرض از مبدا"] = f"{b_val:.2f}" if b_val is not None else "-"
+                if m_val is not None and b_val is not None:
+                    distance = abs(b_val) / np.sqrt(m_val**2 + 1)
+                    row["طول از مبدا"] = f"{distance:.2f}"
+                else:
+                    row["طول از مبدا"] = "-"
+                row["a"] = "-"
+                row["b"] = "-"
+                row["c"] = "-"
+                row["△/دلتا"] = "-"
+            data.append(row)
+            
+        df = pd.DataFrame(data)
+        st.data_editor(df, disabled=True,hide_index=True)
+
+    def display_eqs(self):
+        st.markdown("<h1 style='color: #ff0000; text-align:center;'>رسم و نمایش  خط ها</h1>", unsafe_allow_html=True)
+        st.divider()
+        with st.expander("اطلاعات خطوط",expanded=True):
+            self.display_lines_table()
+        st.divider()
+        with st.expander("رسم خط",expanded=True):
+            selected_eqs=st.multiselect("انتخاب خط ها",options=[line["name"] for line in st.session_state["registered_lines"]])
+            if selected_eqs:
+                selected_lines = [line for line in st.session_state["registered_lines"] if line["name"] in selected_eqs]
+                fig=LineAlgorithm().plot(selected_lines)
+                st.pyplot(fig)
+                st.session_state["line_fig"]=fig
+                if not st.session_state["line_fig"] is None :
+                    # ایجاد دکمه دانلود
+                    buffer = BytesIO()
+                    st.session_state.line_fig.savefig(buffer, format="png")
+                    buffer.seek(0)
+                    st.download_button(
+                        label="دانلود نمودار ",
+                        data=buffer,
+                        file_name="eq.png",
+                        mime="image/png",
+                        use_container_width=True,
+                        help="با زدن این دکمه نمودار  برای شما دانلود میشود"
+                    )
+
+            else:
+                st.warning("لطفاً حداقل یک خط را انتخاب کنید.")
 if __name__ == "__main__":
     global benchmark
     benchmark=Benchmark()
