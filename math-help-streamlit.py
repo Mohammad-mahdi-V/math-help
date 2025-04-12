@@ -91,7 +91,6 @@ class Benchmark:
             end_time = time.time()
             duration = end_time - start_time
             num_subsets = 1 << n  # تعداد زیرمجموعه‌ها = 2^n
-            print(f"[Power Set] n = {n} | تعداد زیرمجموعه‌ها: {num_subsets:,} | زمان اجرا: {duration:.6f} ثانیه")
             if duration > 1.0:
                 break
             max_subsets = num_subsets
@@ -108,7 +107,6 @@ class Benchmark:
             end_time = time.time()
             duration = end_time - start_time
 
-            print(f"[Partitions] n = {n} | تعداد افرازها: {len(partitions):,} | زمان اجرا: {duration:.6f} ثانیه")
             if duration > 1.0:
                 break
             max_n_partitions = n
@@ -125,7 +123,6 @@ class Benchmark:
         file_path = os.path.join(self.output_dir, self.BENCHMARK_FILE)
         with open(file_path, "wb") as f:
             pickle.dump(data, f)
-        print(f"✅ نتایج بنچمارک در فایل '{file_path}' ذخیره شدند.")
 
     def load_results_pickle(self):
         file_path = os.path.join(self.output_dir, self.BENCHMARK_FILE)
@@ -252,7 +249,7 @@ class LineAlgorithm:
                         return ("implicit", expr, None, None, info)
 
             except Exception as e:
-                return ("error", None, None, None, "خطا در تبدیل معادله.")
+                return ("error", None, None, None, "خطا در تبدیل معادله." )
     def plot(self, equations):
             fig, ax = plt.subplots(figsize=(8, 6))
             x_vals = np.linspace(-20, 20, 400)
@@ -264,7 +261,6 @@ class LineAlgorithm:
             letter_index = 0
             colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
             for i, line in enumerate(equations):
-                print(line)
                 if line.get("type", "linear") in ["general", "quadratic"]:
                     if line["type"] == "general":
                         a = line["a"]
@@ -289,7 +285,15 @@ class LineAlgorithm:
                         ax.plot(x_vals, y_vals, label=f"{line['name']}: {a}x² + {b_coef}x + {c}")
                 elif line["type"] == "implicit":
                     expr = line["input"]
-                    expr = sp.sympify(expr.split('=')[0])
+                    expr = expr.replace('^', '**')
+                    transformations = standard_transformations + (implicit_multiplication_application,)
+                    if "=" in expr:
+                        left_str, right_str = expr.split("=")
+                        left_expr = parse_expr(left_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                        right_expr = parse_expr(right_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                        expr = sp.simplify(left_expr - right_expr)
+                    else:
+                        expr = parse_expr(expr, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
                     f = sp.lambdify((self.x, self.y), expr, 'numpy')
                     y_vals, x_vals = np.ogrid[-5:5:100j, -5:5:100j]  # دامنه کوچک‌تر برای توان‌های بالا
                     color = colors[i % len(colors)]  # رنگ بر اساس ترتیب
@@ -396,8 +400,17 @@ class SetsAlgorithm:
         اعتبارسنجی عبارت ورودی برای اطمینان از فرمت صحیح قبل از پردازش.
         """
         i = 0
+        open_paren_stack = []
         while i < len(expression):
             char = expression[i]
+            if char == '(':
+                open_paren_stack.append(i)
+
+            elif char == ')':
+                if not open_paren_stack:  
+                    raise ValueError(f"خطا: پرانتز بسته در موقعیت {i} بدون پرانتز باز متناظر.")
+                open_paren_stack.pop()
+            
             if char in "|&-":
                 if i + 1 >= len(expression):
                     raise ValueError("خطا: عبارت نمی‌تواند با عملگر '|'، '&' یا '-' به پایان برسد.")
@@ -407,9 +420,10 @@ class SetsAlgorithm:
                 if j >= len(expression):
                     raise ValueError("خطا: عبارت نمی‌تواند با عملگر '|'، '&' یا '-' به پایان برسد.")
                 next_char = expression[j]
-                if not (next_char.isalnum() or next_char == '_' or next_char == '{' or next_char == '('):
+                if not ( next_char == '-' or next_char == '{' or next_char == '('or (next_char == ')' and open_paren_stack)):
+                        
                     raise ValueError(
-                        f"خطا: بعد از عملگر '{char}' کاراکتر '{next_char}' مجاز نیست. فقط حروف انگلیسی، اعداد، '_' یا '{{' یا '(' مجاز هستند."
+                        f"خطا: بعد از عملگر '{char}' کاراکتر '{next_char}' مجاز نیست. فقط حروف انگلیسی تعریف شده، اعداد، '-' یا '{{' یا '(' مجاز هستند."
                     )
                 i = j
             else:
@@ -1045,7 +1059,10 @@ class init_chat_bot():
             self.chat = self.model.start_chat(history={"role": "user", "parts": [{"text": self.system_message}]})
             self.chat_on=True
     def send_message(self, user_message):
-        response = self.chat.send_message(user_message)
+        try:
+            response = self.chat.send_message(user_message)
+        except:
+            response=" اگر از نسخه افلاین استفاده میکنید به دی ان اس متصل شوید اگر در صورتی که از انلاین استفاده میکنید یعنی با محدودیت های نسخه رایگان رو به رو شدیم بعدا تلاش کنید"
         return response
     def clear(self):
         self.chat.history.clear()
@@ -1081,7 +1098,10 @@ class NLP_with_ai():
         self.NLP=init_chat_bot(other_system_message=system_message)
         self.NLP.model_config(0,"gemini-2.0-pro-exp-02-05")
     def send_prompt(self,prompt):
-        return self.NLP.send_message(prompt).text
+        try:
+            return self.NLP.send_message(prompt).text
+        except:
+            return self.NLP.send_message(prompt)
 
 class App:
 
@@ -2101,8 +2121,15 @@ class App:
                             bot_message = st.session_state["Juopiter_cb"].send_message(user_message)
                         response_container.empty()
                         with response_container.chat_message("🤖"):
-                            display_message(bot_message.text, container=st)
-                        st.session_state["message"].append({'role': f"{select_ai_model}", 'content': bot_message.text})
+                            try:
+                                display_message(bot_message.text, container=st)
+                            except:
+                                display_message(bot_message, container=st)
+
+                        try:
+                            st.session_state["message"].append({'role': f"{select_ai_model}", 'content': bot_message.text})
+                        except:
+                            st.session_state["message"].append({'role': f"{select_ai_model}", 'content': bot_message})
 
             with col_download:
                 json_str = json.dumps(st.session_state["message"], ensure_ascii=False, indent=2)
@@ -2157,7 +2184,7 @@ class App:
                                         st.session_state["ai_set_input_confirmation"]=False
                                     
                                 user_input=st.text_area("مجموعه مورد نظر خود را به صورت زبانی یا ریاضی بنویسید",key="ai_input_set_text")
-                                st.write(f"<div style='overflow-x: auto; white-space: nowrap; display: flex;justify-content: center; margin:10px;'>جواب : {st.session_state["ai_set_input_answer"]} </div>",unsafe_allow_html=True)
+                                st.write(f"<div style='overflow-x: auto; white-space: nowrap; display: flex; margin:10px;'>جواب : {st.session_state["ai_set_input_answer"]} </div>",unsafe_allow_html=True)
                                 st.button("ارسال درخواست",use_container_width=True,on_click=AI_Sent)
                                 if st.button("تایید مجموعه",use_container_width=True,disabled=st.session_state["ai_set_input_confirmation"]):
                                     st.session_state["set_input"]=st.session_state["ai_set_input_answer"]
@@ -2190,12 +2217,13 @@ class App:
                 st.session_state["current_section"] = "display_sets"  # یک مقدار جدید برای نمایش نتایج
                 st.rerun()
         if end_btn:
-            st.session_state["num_sets"]-1
+            st.session_state["num_sets"] -= 1
             if  st.session_state["num_sets"]<=1:
                 st.session_state["show_hr_sidebar"] = False
+            else:
+                st.session_state["show_hr_sidebar"]=True
             st.session_state["calc_result"]="در انتظار دریافت عبارت"
             st.session_state["current_section"] = "display_sets"  # یک مقدار جدید برای نمایش نتایج
-            st.session_state["num_sets"] -= 1
             st.rerun()
         self.render_notification(self.notification_placeholder)
 
@@ -2230,7 +2258,7 @@ class App:
                                         st.session_state["ai_eq_input_confirmation"]=False
                                     
                                 user_input=st.text_area("ویژگی معادله خود را بیان کنید",key="ai_input_set_text")
-                                st.write(f"<div style='overflow-x: auto; white-space: nowrap; display: flex;justify-content: center; margin:10px;'>جواب : {st.session_state["ai_eq_input_answer"]} </div>",unsafe_allow_html=True)
+                                st.write(f"<div style='overflow-x: auto; white-space: nowrap; display: flex; margin:10px;'>جواب : {st.session_state["ai_eq_input_answer"]} </div>",unsafe_allow_html=True)
                                 st.button("ارسال درخواست",use_container_width=True,on_click=AI_Sent)
                                 if st.button("تایید معادله",use_container_width=True,disabled=st.session_state["ai_eq_input_confirmation"]):
                                     st.session_state["eq_input_main"]=st.session_state["ai_eq_input_answer"]
@@ -2282,7 +2310,7 @@ class App:
         if len(self.name_eq) != 1 or self.name_eq not in string.ascii_letters:
             self.add_notification("نام خط باید تنها یک حرف انگلیسی باشد (مثلاً A).")
             return  False
-        print(st.session_state.registered_lines)
+
         duplicate = any(line["name"] == self.name_eq.upper() for line in st.session_state.registered_lines)
         if duplicate:
             self.add_notification("نام خط تکراری است.")
@@ -2431,8 +2459,386 @@ class App:
                          ما تا امسال باهم در تیم های مقابل بودیم اما امسال تصمیم گرفتیم در یک گروه قرار بگیریم و یک شب وقتی در حال بررسی ایده هوش مصنوعی بودیم به صورت اتفاقی اسم ژوپیتر را اسم تیم خود گذاشتیم       
                 """)
     def how_to_use(self):
-        st.markdown("<h1 style='color: #ff00ff; text-align:center;'>نحوه استفاده</h1>", unsafe_allow_html=True)
-        st.write("اینجا نحوه استفاده از برنامه توضیح داده می‌شود.")
+        # اضافه کردن FontAwesome برای آیکون‌ها
+        st.markdown(
+            '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">',
+            unsafe_allow_html=True
+        )
+
+        # استایل‌های سفارشی با CSS برای تب‌ها، محتوا و انیمیشن
+        st.markdown("""
+        <style>
+        .stTabs [role="tab"] {
+            font-size: 22px;
+            font-weight: bold;
+            color: black;
+            padding: 15px 30px;
+            border-radius: 15px 15px 0 0;
+            background-color: #8ec3f1;
+            margin-right: 10px;
+            transition: all 0.3s ease;
+        }
+        .stTabs [role="tab"]:hover {
+            background-color: #39a4fb;
+            color: #ffffff;
+        }
+        .stTabs [role="tab"][aria-selected="true"] {
+            background-color: #0272d3;
+            color: #ffffff;
+        }
+        .section-content {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 0 0 15px 15px;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        h1, h2, h3 {
+            color: #00ffcc;
+            text-align: center;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+            
+        }
+        li {
+            margin-bottom: 15px;
+            font-size: 18px;
+            display: flex;
+            align-items: flex-start;
+            flex-direction: column
+        }
+        li i {
+            margin-right: 15px;
+            color: #00ffcc;
+            font-size: 24px;
+        }
+        .video-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 25px;
+        }
+        .tip-box {
+            background-color: #e6f3ff;
+            padding: 15px;
+            border-radius: 40px;
+            margin-top: 20px;
+            opasity: 0.7;   
+        }
+        .icon-color{
+            color: #0089ff;
+            margin: 9px;
+        }
+        .title-size{
+                font-size: xx-large;
+                font-weight: bold;
+                margin: 15px;
+        }
+        .warning-box {
+            background-color: #ffe6e6;
+            padding: 15px;
+            border-radius: 40px;
+            margin-top: 20px;
+        }
+        .video-container{
+            height: 100%;
+            min-height:599px;
+        }
+
+        .video-container iframe{
+            width:100%;
+            min-height:599px;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        # عنوان اصلی صفحه
+        st.markdown("<h1>✨ راهنمای استفاده از برنامه ✨</h1>", unsafe_allow_html=True)
+
+        # تعیین تب‌های قابل نمایش بر اساس بخش فعلی
+        current_section = st.session_state.get("current_section", "how_to_use")
+        if current_section == "sets":
+            tab_options = ["مجموعه‌ها"]
+        elif current_section == "lines":
+            tab_options = ["خط"]
+        elif current_section == "chatbot":
+            tab_options = ["گفتگو با هوش مصنوعی"]
+        else:
+            # نمایش تمام تب‌ها برای حالت عمومی (مثل "how_to_use" یا "about")
+            tab_options = [
+                "مجموعه‌ها",
+                "خط",
+                "گفتگو با هوش مصنوعی"
+            ]
+
+        # ایجاد تب‌های تعاملی
+        tabs = st.tabs(tab_options)
+
+        # تب مجموعه‌ها
+        if "مجموعه‌ها" in tab_options:
+            with st.container(key="plot_container"):
+                with tabs[tab_options.index("مجموعه‌ها")]:
+                    
+                    st.write("""<div class='title-size'>📚 راهنمای جامع کار با بخش مجموعه‌ها</div>""", unsafe_allow_html=True)
+                    st.write(""" """)
+                    st.write("""
+                    <div class='tip-box'>
+                    بخش مجموعه‌ها به شما امکان می‌دهد تا مجموعه‌های ریاضی را تعریف کنید، عملیات مختلف (مانند اشتراک، اجتماع و تفاضل) را انجام دهید و روابط بین آن‌ها را با نمودار ون بررسی کنید. این بخش برای حل مسائل تئوری مجموعه‌ها طراحی شده و در ادامه به صورت گام‌به‌گام توضیح داده شده است:
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'>  ۱. ورود مجموعه‌ها</div>""", unsafe_allow_html=True  )
+                    
+                    st.write("""
+                    
+                    <div class='tip-box'> <ul>
+                        <li><div><i class='fas icon-color fa-pencil-alt'></i> <b>نام مجموعه</b></div>: یک حرف انگلیسی (مثل A، B یا C) برای نام‌گذاری مجموعه وارد کنید. این نام باید منحصربه‌فرد باشد و فقط شامل یک حرف انگلیسی باشد.<br>
+                            <b>مثال</b>: A یا B (حروف کوچک به طور خودکار به حروف بزرگ تبدیل می‌شوند).<br>
+                            <b>نکته</b>: از وارد کردن اعداد یا چند حرف (مثل AB) خودداری کنید.</li>
+                        <li><div><i class='fas icon-color fa-list'></i> <b>اعضای مجموعه</b></div>: اعضای مجموعه را در قالب {عضو1, عضو2, ...} وارد کنید. اعضا می‌توانند اعداد، حروف یا حتی مجموعه‌های دیگر باشند.<br>
+                            <b>مثال</b>: {1, 2, 3} یا {a, b, c} یا  {{1, 2}, {3, 4}}    .<br>
+                            <b>نکته</b>: تعداد آکولادهای باز ({) و بسته (}) باید برابر باشد. مجموعه خالی ({}) فعلاً پشتیبانی نمی‌شود.</li>
+                    </ul> </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> ۲. حالت پیشرفته</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    
+                    <div class='tip-box'> <ul>
+                        <li><div><i class='fas icon-color fa-cogs'></i> <b>فعال‌سازی حالت پیشرفته</b></div>: با فعال کردن این گزینه (از بالای صفحه)، می‌توانید تا ۵ مجموعه وارد کنید و عملیات پیچیده‌تری انجام دهید. در حالت عادی، حداکثر ۲ مجموعه قابل وارد کردن است.<br>
+                            <b>مثال</b>: در حالت پیشرفته می‌توانید مجموعه‌های A، B، C، D و E را وارد کنید و روابط بین آن‌ها را بررسی کنید.<br>
+                            <b>نکته</b>: اگر بیش از ۳ مجموعه وارد کنید، حالت پیشرفته به طور خودکار فعال می‌شود.</li>
+                    </ul> </div>
+                    
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> ۳. عملیات روی مجموعه‌ها</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    <div class='tip-box'> <ul>
+                        <li><i class='fas icon-color fa-calculator icon-color'></i> <b>محاسبات</b>: در بخش محاسبات (بعد از ثبت مجموعه‌ها)، می‌توانید از عملگرهای زیر استفاده کنید:<br>
+                            - <b>اشتراک (&)</b>: مثلاً  A & B     اعضای مشترک بین A و B را برمی‌گرداند.<br>
+                            - <b>اجتماع (|)</b>: مثلاً  A | B     همه اعضای A و B را ترکیب می‌کند.<br>
+                            - <b>تفاضل (-)</b>: مثلاً  A - B     اعضای A که در B نیستند را نشان می‌دهد.<br>
+                            <b>مثال</b>: اگر A = {1, 2, 3} و B = {2, 3, 4}، عبارت  A & B     نتیجه {2, 3} را می‌دهد.<br>
+                            <b>نکته</b>: از نام‌های تعریف‌شده برای مجموعه‌ها استفاده کنید و از وارد کردن نام‌های ناموجود (مثل X) خودداری کنید.</li>
+                    </ul> </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> ۴. نمودار ون</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    <div class='tip-box'> <ul>
+                        <li><div><i class='fas icon-color fa-chart-pie'></i> <b>رسم نمودار</b></div>: برای ۲ یا ۳ مجموعه، می‌توانید نمودار ون را رسم کنید تا روابط بین مجموعه‌ها (اشتراک‌ها، تفاضل‌ها و ...) را به صورت بصری ببینید. برای بیش از ۳ مجموعه در حالت پیشرفته، نمودار ون به صورت پیشرفته‌تر نمایش داده می‌شود.<br>
+                            <b>مثال</b>: اگر A = {1, 2} و B = {2, 3}، نمودار ون نشان می‌دهد که {2} در اشتراک و {1} و {3} در نواحی جداگانه هستند.<br>
+                            <b>نکته</b>: نمودار را می‌توانید به صورت PNG دانلود کنید.</li>
+                    </ul> </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> ۵. زیرمجموعه‌ها و افرازها</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    <div class='tip-box'> <ul>
+                        <li><div><i class='fas icon-color fa-table'></i> <b>زیرمجموعه‌ها</b></div>: برای هر مجموعه، تمام زیرمجموعه‌ها (از ۰ عضوی تا n عضوی) محاسبه و نمایش داده می‌شوند.<br>
+                            <b>مثال</b>: برای مجموعه {1, 2}، زیرمجموعه‌ها شامل {}, {1}, {2}, {1, 2} هستند.<br>
+                            <b>محدودیت</b>: برای مجموعه‌های بزرگ، تعداد زیرمجموعه‌ها ممکن است محدود شود.</li>
+                        <li><div><i class='fas icon-color fa-columns'></i> <b>افرازها</b></div>: افرازهای مجموعه (تقسیم مجموعه به زیرمجموعه‌های ناتهی و جدا از هم) نمایش داده می‌شوند.<br>
+                            <b>مثال</b>: برای {1, 2}، افرازها شامل {{1}, {2}} و {{1, 2}} هستند.</li>
+                    </ul> </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> نکات مهم</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    <div class='tip-box'>
+                        <b>نکته</b>: همیشه مطمئن شوید که فرمت مجموعه‌ها درست است (مثلاً آکولادها برابر باشند). اگر خطایی دریافت کردید، ورودی خود را بررسی کنید.
+                    </div>
+                    <div class='warning-box'>
+                        <b>هشدار</b>: مجموعه‌های خالی ({}) فعلاً پشتیبانی نمی‌شوند. همچنین، از وارد کردن کاراکترهای غیرمجاز (مثل # یا %) خودداری کنید.
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> 🎥 ویدیوی آموزشی</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    <div class='video-container'>
+                        <!-- لطفاً لینک ویدیوی واقعی را جایگزین کنید -->
+                        <iframe src="https://www.aparat.com/video/video/embed/videohash/VIDEO_ID/vtframe" 
+                        width="700" height="400" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true"></iframe>
+                    </div>
+                    <p style='text-align: center; color: #888;'>ویدیو در حال آماده‌سازی است. لطفاً لینک واقعی را جایگزین کنید.</p>
+                    """, unsafe_allow_html=True)
+
+                    st.write("</div>", unsafe_allow_html=True)
+
+        # تب خط
+        if "خط" in tab_options:
+            with tabs[tab_options.index("خط")]:
+                with st.container(key="line_conteiner"):
+                    
+                    st.write("""<div class='title-size'>📏 راهنمای جامع کار با بخش خط</div>""", unsafe_allow_html=True)
+                    st.write("""
+                             <div class='tip-box'>
+                    بخش خط به شما امکان می‌دهد خطوط را به دو روش (معادله یا نقطه‌ای) تعریف کنید، اطلاعات آن‌ها (مثل شیب و عرض از مبدا) را بررسی کنید و نمودارشان را رسم کنید. این بخش برای حل مسائل هندسه تحلیلی و جبر خطی طراحی شده است. در ادامه جزئیات را توضیح می‌دهیم:
+                    </div>""", unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> ۱. انتخاب روش ورود خط</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    <div class='tip-box'> <ul>
+                        <li><div><i class='fas icon-color fa-check-circle'></i> <b>دو روش برای تعریف خط</b></div>: می‌توانید خط را با معادله یا با وارد کردن مختصات دو نقطه تعریف کنید.<br>
+                            - <b>معادله</b>: برای زمانی که معادله خط را دارید (مثل y = 2x + 3).<br>
+                            - <b>نقطه‌ای</b>: برای زمانی که دو نقطه از خط را دارید (مثل (1, 2) و (3, 4)).<br>
+                            <b>نکته</b>: روش مناسب را با توجه به اطلاعات در دسترس انتخاب کنید.</li>
+                    </ul> </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> ۲. ورود خط با معادله</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    <div class='tip-box'> <ul>
+                        <li><div><i class='fas icon-color fa-square-root-alt'></i> <b>نام خط</b></div>: یک حرف انگلیسی (مثل L یا M) برای نام‌گذاری خط وارد کنید.<br>
+                            <b>مثال</b>: L (حروف کوچک به طور خودکار به حروف بزرگ تبدیل می‌شوند).<br>
+                            <b>نکته</b>: نام خط باید منحصربه‌فرد باشد.</li>
+                        <li><div><i class='fas icon-color fa-equals'></i> <b>معادله خط</b></div>: معادله را به یکی از فرمت‌های زیر وارد کنید:<br>
+                            - <b>فرم شیب-عرض</b>: مثل  y = 2x + 3    .<br>
+                            - <b>فرم کلی</b>: مثل  2x + 3y - 6 = 0    .<br>
+                            - <b>فرم‌های دیگر</b>: معادلات درجه دوم (مثل y = x²) یا معادلات غیرخطی هم پشتیبانی می‌شوند.<br>
+                            <b>مثال</b>:  y = -0.5x + 4     یا  x - 2y = 1    .<br>
+                            <b>نکته</b>: از کاراکتر ^ برای توان استفاده کنید (مثل x^2 برای x²).</li>
+                    </ul> </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> ۳. ورود خط با نقاط</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    <div class='tip-box'> <ul>
+                        <li><div><i class='fas icon-color fa-map-marker-alt'></i> <b>مختصات نقاط</b></div>: مختصات x و y دو نقطه را وارد کنید.<br>
+                            <b>مثال</b>: نقطه اول (2, 3) و نقطه دوم (4, 7).<br>
+                            <b>نکته</b>: مختصات باید اعداد معتبر باشند (مثل 1.5 یا -2). از وارد کردن حروف یا کاراکترهای غیرعددی خودداری کنید.</li>
+                        <li><div><i class='fas icon-color fa-exclamation-triangle'></i> <b>محدودیت</b></div>: دو نقطه نباید x یکسان داشته باشند، وگرنه خط عمودی است و خطا دریافت می‌کنید.</li>
+                    </ul> </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> ۴. اطلاعات خط</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    <div class='tip-box'> <ul>
+                        <li><div><i class='fas icon-color fa-info-circle'></i> <b>مشخصات خط</b></div>: بعد از ثبت خط، اطلاعات زیر نمایش داده می‌شود:<br>
+                            - <b>شیب (m)</b>: برای خطوط غیرعمودی (مثل 2 یا -0.5).<br>
+                            - <b>عرض از مبدا (b)</b>: نقطه تقاطع با محور y (مثل 3 در y = 2x + 3).<br>
+                            - <b>فاصله از مبدا</b>: فاصله خط از نقطه (0, 0).<br>
+                            <b>مثال</b>: برای y = 2x + 3، شیب = 2، عرض = 3، فاصله = 1.34.<br>
+                            <b>نکته</b>: برای معادلات غیرخطی (مثل y = x²)، اطلاعات متفاوتی مثل ضرایب و دلتا نمایش داده می‌شود.</li>
+                    </ul> </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> ۵. رسم نمودار</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    <div class='tip-box'> <ul>
+                        <li><div><i class='fas icon-color fa-chart-line'></i> <b>نمایش گرافیکی</b></div>: خط یا منحنی روی یک نمودار رسم می‌شود. محورهای x و y با مقیاس مشخص و شبکه‌بندی نمایش داده می‌شوند.<br>
+                            <b>مثال</b>: برای y = 2x + 3، یک خط با شیب 2 رسم می‌شود.<br>
+                            <b>نکته</b>: برای معادلات غیرخطی، نمودار ممکن است به صورت منحنی باشد.</li>
+                    </ul> </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> نکات مهم</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    <div class='tip-box'>
+                        <b>نکته</b>: اگر معادله خط را اشتباه وارد کنید (مثلاً y = 2x ++ 3)، خطا دریافت می‌کنید. قبل از ثبت، معادله را بررسی کنید.
+                    </div>
+                    <div class='warning-box'>
+                        <b>هشدار</b>: در حالت نقطه‌ای، مطمئن شوید که مختصات نقاط معتبر هستند و x آن‌ها یکسان نیست.
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> 🎥 ویدیوی آموزشی</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    <div class='video-container'>
+                        <!-- لطفاً لینک ویدیوی واقعی را جایگزین کنید -->
+                        <iframe src="https://www.aparat.com/video/video/embed/videohash/VIDEO_ID/vtframe" 
+                        width="700" height="400" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true"></iframe>
+                    </div>
+                    <p style='text-align: center; color: #888;'>ویدیو در حال آماده‌سازی است. لطفاً لینک واقعی را جایگزین کنید.</p>
+                    """, unsafe_allow_html=True)
+
+                    st.write("</div>", unsafe_allow_html=True)
+
+            # تب گفتگو با هوش مصنوعی
+            if "گفتگو با هوش مصنوعی" in tab_options:
+                with tabs[tab_options.index("گفتگو با هوش مصنوعی")]:
+                    
+                    st.write("""<div class='title-size'>🤖 راهنمای جامع کار با بخش گفتگو با هوش مصنوعی</div>""", unsafe_allow_html=True)
+                    st.write("""
+                             <div class='tip-box'>
+                    بخش گفتگو با هوش مصنوعی به شما امکان می‌دهد با "ژوپیتر"، دستیار هوشمند ما، درباره مسائل ریاضی و فیزیک چت کنید. این بخش برای حل سوالات، توضیح مفاهیم و حتی بررسی محاسبات طراحی شده است. در ادامه جزئیات را می‌خوانید:
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> ۱. ارسال سوال</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    <div class='tip-box'> <ul>
+                        <li><div><i class='fas icon-color fa-comment-dots'></i> <b>ورود سوال</b></div>: سوال خود را در کادر متنی پایین صفحه وارد کنید.<br>
+                            <b>مثال</b>: "حل معادله x² - 4 = 0" یا "قانون دوم نیوتن چیست؟".<br>
+                            <b>نکته</b>: سوالات باید مرتبط با ریاضی یا فیزیک باشند. سوالات غیرمرتبط (مثل تاریخ یا ادبیات) با پاسخ "فقط به سوالات ریاضی و فیزیک پاسخ می‌دهم" مواجه می‌شوند.</li>
+                    </ul> </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> ۲. تنظیمات هوش مصنوعی</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    <div class='tip-box'> <ul>
+                        <li><div><i class='fas icon-color fa-sliders-h'></i> <b>خلاقیت</b></div>: از سایدبار می‌توانید سطح خلاقیت (از 0 تا 2) را تنظیم کنید.<br>
+                            - <b>خلاقیت پایین (مثل 0.5)</b>: پاسخ‌ها دقیق و مستقیم هستند.<br>
+                            - <b>خلاقیت بالا (مثل 1.5)</b>: پاسخ‌ها خلاقانه‌تر اما ممکن است کمی انحراف داشته باشند.<br>
+                            <b>مثال</b>: برای حل معادله، خلاقیت پایین بهتر است.<br>
+                            <b>نکته</b>: خلاقیت بالا ممکن است دقت را کاهش دهد.</li>
+                        <li><div><i class='fas icon-color fa-cogs'></i> <b>انتخاب مدل</b></div>: مدل‌های مختلف (مثل جمنای 2 پرو یا ژوپیتر آزمایشی) را از سایدبار انتخاب کنید.<br>
+                            <b>مثال</b>: مدل "جمنای 2 فلاش با تفکر عمیق" برای مسائل پیچیده مناسب‌تر است.<br>
+                            <b>نکته</b>: مدل‌های قوی‌تر ممکن است پاسخ‌های دقیق‌تری بدهند.</li>
+                    </ul> </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> ۳. مدیریت گفتگو</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    <div class='tip-box'> <ul>
+                        <li><div><i class='fas icon-color fa-download'></i> <b>دانلود تاریخچه</b></div>: کل مکالمه را به صورت فایل JSON دانلود کنید.<br>
+                            <b>مثال</b>: فایل دانلودشده شامل تمام سوالات و پاسخ‌هاست.<br>
+                            <b>نکته</b>: این فایل را می‌توانید بعداً بارگذاری کنید.</li>
+                        <li><div><i class='fas icon-color fa-upload'></i> <b>بارگذاری گفتگو</b></div>: فایل JSON قبلی را از سایدبار بارگذاری کنید تا مکالمه ادامه پیدا کند.<br>
+                            <b>نکته</b>: فایل باید فرمت صحیح داشته باشد، وگرنه خطا دریافت می‌کنید.</li>
+                        <li><div><i class='fas icon-color fa-trash-alt'></i> <b>حذف گفتگو</b></div>: با دکمه "حذف گفتگو"، مکالمه را ریست کنید.<br>
+                            <b>هشدار</b>: این کار تمام تاریخچه را پاک می‌کند.</li>
+                    </ul> </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> ۴. نکات ویژه</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    <div class='tip-box'> <ul>
+                        <li><div><i class='fas icon-color fa-exclamation-circle'></i> <b>محدودیت موضوعی</b></div>: ژوپیتر فقط به سوالات ریاضی و فیزیک پاسخ می‌دهد. اگر سوال غیرمرتبط بپرسید، پاسخ مناسب دریافت نمی‌کنید.</li>
+                        <li><div><i class='fas icon-color fa-code'></i> <b>حالت دولوپر</b></div>: اگر عضو تیم ژوپیتر هستید، با وارد کردن رمز می‌توانید به حالت دولوپر دسترسی پیدا کنید که محدودیت‌های کمتری دارد.<br>
+                            <b>نکته</b>: رمز فقط برای اعضای تیم است و نباید فاش شود.</li>
+                    </ul> </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> نکات مهم</div>""", unsafe_allow_html=True)
+                    st.write("""
+                    <div class='tip-box'>
+                        <b>نکته</b>: برای سوالات پیچیده، سوال خود را واضح و دقیق بنویسید تا پاسخ بهتری بگیرید.
+                    </div>
+                    <div class='warning-box'>
+                        <b>هشدار</b>: از وارد کردن عبارات توهین‌آمیز خودداری کنید، وگرنه با پاسخ "خودتی" مواجه می‌شوید!
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("""<div class='title-size'> 🎥 ویدیوی آموزشی</div>""", unsafe_allow_html=True)
+                    st.container(key="vdi_con")
+                    st.write("""
+                    <div class='video-container'>
+                        <!-- لطفاً لینک ویدیوی واقعی را جایگزین کنید -->
+                        <iframe src="https://www.aparat.com/video/video/embed/videohash/VIDEO_ID/vtframe" 
+                        width="700" height="400" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true"></iframe>
+                    </div>
+                    <p style='text-align: center; color: #888;'>ویدیو در حال آماده‌سازی است. لطفاً لینک واقعی را جایگزین کنید.</p>
+                    """, unsafe_allow_html=True)
+
+                    st.write("</div>", unsafe_allow_html=True)
     def next_set(self):
         st.session_state["set_input"]=""
         st.session_state["ai_set_input_answer"]=""
