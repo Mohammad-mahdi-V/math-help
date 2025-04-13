@@ -830,15 +830,25 @@ class SetsAlgorithm:
         text = text.replace('∩', '&').replace('∪', '|')
         fixed_text = SetsAlgorithm.fix_set_variables(text)
 
-        try:
-            transformed_text = SetsAlgorithm.parse_set_string(fixed_text)
-        except ValueError as e:
-            return str(e)
+        # بررسی عمق متغیرها
+        var_depths = self.check_variable_depths(fixed_text)
+        for var, depths in var_depths.items():
+            # اگر متغیر تعریف نشده باشد
+            if var.upper() not in self.set_of_sets:
+                return f"متغیر '{var}' تعریف نشده است!"
+            # اگر متغیر تنها در عمق 0 (خارج از مجموعه‌ها) ظاهر شده باشد
+            if all(d == 0 for d in depths):
+                if var.upper() not in self.set_of_sets:
+                    return f"متغیر '{var}' تعریف نشده است!"
+        # تبدیل عبارت به فرمت مناسب برای eval
+        transformed_text = SetsAlgorithm.parse_set_string(fixed_text)
+        # آماده‌سازی دیکشنری متغیرها (با توجه به اینکه ممکن است نام‌ها به حروف کوچک نیز مورد استفاده قرار گیرند)
         variables = {name: frozenset(set_val) for name, set_val in self.set_of_sets.items()}
         variables.update({name.lower(): frozenset(set_val) for name, set_val in self.set_of_sets.items()})
+
         try:
-            result = eval(transformed_text, {"__builtins__": {}, "frozenset": frozenset, "set": set}, variables)
-            return SetsAlgorithm.set_to_str(result)
+            result = eval(transformed_text, {"__builtins__": {}, "frozenset": frozenset}, variables)
+            return self.set_to_str(result)
         except Exception as e:
             if len(text.strip())==0:
                 return "عبارت  ورودی خالی است"
