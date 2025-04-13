@@ -36,7 +36,9 @@ import webbrowser
 from io import BytesIO
 import pickle
 
-
+# --------------------------------------------------
+#  شناسنایی قدرت سرور برای محاسبات مجموعه
+# --------------------------------------------------
 class Benchmark:
     BENCHMARK_FILE = "benchmark_results.pkl"
 
@@ -46,7 +48,7 @@ class Benchmark:
         self.max_n_partitions = 0
         self.execute()
 
-
+    #  تابع مشابه تابع اصلی در ست الگوریتم
     def power_set(self, given_set):
         # تبدیل ورودی به مجموعه اگه مجموعه نباشه
         if not isinstance(given_set, set):
@@ -66,7 +68,7 @@ class Benchmark:
             subset_str = "{" + ", ".join(map(str, subset)) + "}" if subset else "{}"
             subsets_dict[f"زیرمجموعه {len(subset)} عضوی"].append(subset_str)
         return subsets_dict
-
+    # تابع مشابه تابع اصلی در ست الگوریتم
     def partitions(self, s):
         partition_list = []
         partition_loop = 0
@@ -75,7 +77,7 @@ class Benchmark:
             partition_loop += 1
 
         return partition_list
-
+    # تابع اجرای بنچمارک سابست ها
     def benchmark_power_set(self):
         """
         محاسبه حداکثر تعداد زیرمجموعه‌هایی که در کمتر از یک ثانیه تولید می‌شوند.
@@ -95,7 +97,7 @@ class Benchmark:
                 break
             max_subsets = num_subsets
         self.max_n_subsets = max_subsets
-
+    # تابع اجرای بنچمارک پارتیشن ها
     def benchmark_partitions(self):
         max_n_partitions = 0
         
@@ -113,8 +115,10 @@ class Benchmark:
 
         self.max_bell=len(partitions)
         self.max_n_partitions = max_n_partitions
-
+    #  ذخیره نتیجه بنچمارک برای صرفه جویی در اجرای های بعدی
     def save_results_pickle(self):
+        # مکس بل حداکثر تعداد افراز ها
+        #مکس ان پارتیشن برای اینکه بدانیم  اخرین مجموعه که میتوانیم تمام افراز های ان را محاسبه کنیم چقدر است
         data = {
             "max_n_subsets": self.max_n_subsets,
             "max_n_partitions": self.max_n_partitions,
@@ -123,7 +127,7 @@ class Benchmark:
         file_path = os.path.join(self.output_dir, self.BENCHMARK_FILE)
         with open(file_path, "wb") as f:
             pickle.dump(data, f)
-
+    # خواندن فایل ذخیره شده
     def load_results_pickle(self):
         file_path = os.path.join(self.output_dir, self.BENCHMARK_FILE)
         if os.path.exists(file_path):
@@ -131,22 +135,19 @@ class Benchmark:
                 data = pickle.load(f)
             return data
         return None
-
+    # اجرای بنچمارک در دو ترید متفاوت  
     def run_benchmarks(self):
         def run_power():
             self.benchmark_power_set()
-
         def run_partitions():
             self.benchmark_partitions()
-
         t1 = threading.Thread(target=run_power)
         t2 = threading.Thread(target=run_partitions)
-
         t1.start()
         t2.start()
-
         t1.join()
         t2.join()
+    #  تشخیص اینکه ایا از قبل اجرا شده یا خیر
     def execute(self):
         benchmark_data = self.load_results_pickle()
         if benchmark_data is None:
@@ -156,11 +157,15 @@ class Benchmark:
             self.max_n_subsets = benchmark_data["max_n_subsets"]
             self.max_n_partitions = benchmark_data["max_n_partitions"]
             self.max_bell=benchmark_data["max_bell"]
-        print(f"✅ نتایج بنچمارک بارگذاری شدند: max_n_subsets = {self.max_n_subsets}, max_n_partitions = {self.max_n_partitions}")
 # --------------------------------------------------
+# این کلاس شامل تمامی توابع مورد نیاز پس از بررسی ورودی برای خطوط است
+# --------------------------------------------------
+
 class LineAlgorithm:
     def __init__(self):
         self.x, self.y = sp.symbols('x y')
+    # در این تابع ما اختلاف بین  درجه چند جمله ایی نسبت به ایکس  و نبست به وای را بدست می اوریم
+    # با این کار از ارور مثپلات جلوگیری میکنیم
     def check_powers(self, expr):
         """بررسی توان‌های x و y در معادله ضمنی"""
         terms = expr.as_ordered_terms()
@@ -169,37 +174,41 @@ class LineAlgorithm:
         for term in terms:
             degree_x = sp.degree(term, self.x)
             degree_y = sp.degree(term, self.y)
+            # ذخیره بزرگترین
             if degree_x>degree_x_main:
                 degree_x_main=degree_x
             if  degree_y>degree_y_main:
                 degree_y_main=degree_y
-
         if abs(degree_x_main-degree_y_main)>2:
             return True
         return False
+    #  در این تابع اطلعاتی درمورد خط بدست میاریم
+    # تمامی طالعات لازم نبوده و برای استفاده به صورت جدا از برنامه بهینه شده است
     def parse_equation(self, equation):
             original_eq = equation.strip()
+            # ایجاد شکل قابل درک معادله برای سیم پای
             eq_processed = original_eq.replace('^', '**')
             transformations = standard_transformations + (implicit_multiplication_application,)
             try:
+                
                 if "=" in eq_processed:
+                    # حل معادله
                     left_str, right_str = eq_processed.split("=")
                     left_expr = parse_expr(left_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
                     right_expr = parse_expr(right_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
                     expr = sp.simplify(left_expr - right_expr)
                 else:
                     expr = parse_expr(eq_processed, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
-
+                #  بررسی متغیر های موجود
                 allowed = {self.x, self.y}
                 extra_symbols = [str(sym) for sym in expr.free_symbols if sym not in allowed]
                 if extra_symbols:
                     error_msg = "متغیر(های) غیرمجاز در معادله: " + ", ".join(extra_symbols)
                     return ("error", None, None, None, error_msg)
 
-                # بررسی توان‌ها در معادله ضمنی
                 if self.check_powers(expr):
                     return ("error", None, None, None, "اختلاف توان‌های x و y بیشتر از دو است.")
-
+                #  تشخیص نوع معادله
                 sol_y = sp.solve(expr, self.y)
                 if sol_y:
                     if len(sol_y) > 1:
@@ -249,8 +258,10 @@ class LineAlgorithm:
                         return ("implicit", expr, None, None, info)
 
             except Exception as e:
-                return ("error", None, None, None, "خطا در تبدیل معادله." )
+                return ("error", None, None, None, f"  در تبدیل معادله در صورت مشکل ادامه دار بود با ایمیل ما در ارتباط باشید در اسرع وقت رسیدگی میشود. {e} " )
     def plot(self, equations):
+            # رسم نمودار
+            # تنظیمات اولیه نمودار
             fig, ax = plt.subplots(figsize=(8, 6))
             x_vals = np.linspace(-20, 20, 400)
             ax.xaxis.set_major_locator(MultipleLocator(15))
@@ -261,6 +272,7 @@ class LineAlgorithm:
             letter_index = 0
             colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
             for i, line in enumerate(equations):
+                # رسم بر اساس نوع خط
                 if line.get("type", "linear") in ["general", "quadratic"]:
                     if line["type"] == "general":
                         a = line["a"]
@@ -366,6 +378,7 @@ class LineAlgorithm:
             ax.legend(fontsize='small', loc='best')
             return fig
     def calculate_from_points(self, point1, point2):
+        # ایجاد معادله از روی نقطه
         x1, y1 = point1
         x2, y2 = point2
         if x1 == x2:
@@ -380,9 +393,9 @@ class SetsAlgorithm:
     
     def __init__(self, set_of_sets):
         """
-        سازنده کلاس
         - اگر ورودی دیکشنری باشد، نام و مقادیر مجموعه‌ها را استخراج می‌کند.
         - در غیر این صورت، مجموعه‌ها را به صورت لیست از مجموعه تبدیل می‌کند.
+        - ویژگی  بالا جهت بهینه سازی برای استفاده کلاس در بیرون از برنامه -
         """
         if isinstance(set_of_sets, dict):
             self.set_of_sets = set_of_sets
@@ -395,6 +408,7 @@ class SetsAlgorithm:
         self.num_sets = len(self.sets)
     # در تابع validate_input_expression:
     @staticmethod
+    # اعتبار سنجی قبل از پردازش محسابات پیشرفته 
     def validate_input_expression(expression: str):
         """
         اعتبارسنجی عبارت ورودی برای اطمینان از فرمت صحیح قبل از پردازش.
@@ -430,6 +444,8 @@ class SetsAlgorithm:
                 i += 1
         return True
     @staticmethod
+    # امادگی برای ایوال
+
     def parse_set_string(s: str) -> str:
         """
         پردازش رشته ورودی مجموعه، تبدیل آن به فرمت قابل‌اجرا در eval
@@ -537,7 +553,7 @@ class SetsAlgorithm:
             return 'set()'
         return parsed_expression
 
-
+    # درست کردن ایراد هایی در اعضای مجموعه که میتوانند مشکل ساز باشند
     @staticmethod
     def fix_set_variables(expression: str) -> str:
         """
@@ -661,6 +677,7 @@ class SetsAlgorithm:
         return "".join(result)
 
     @staticmethod
+    # تشخیص مجموعه های تو در تو
     def to_frozenset(obj):
         """
         تبدیل یک شی (در صورت اینکه مجموعه یا frozenset باشد) به frozenset.
@@ -671,6 +688,7 @@ class SetsAlgorithm:
         return obj
 
     @staticmethod
+    #  زیر مجموعه های یک مجموعه
     def subsets_one_set(given_set):
 
             given_set = set(given_set)
@@ -695,6 +713,7 @@ class SetsAlgorithm:
                     subsets_dict[f"زیرمجموعه {len(subset)} عضوی"].pop()  # حذف آخرین زیرمجموعه
                     break
             return subsets_dict
+    # یافتن افراز های یک مجموعه
     @staticmethod
     def partitions(given_set):
 
@@ -730,30 +749,8 @@ class SetsAlgorithm:
             # اتصال زیرمجموعه‌ها با جداکننده
             partitions_str.append(" | ".join(subset_strs))
         return partitions_str
-    def U(self, bitmask):
-        """
-        محاسبه اتحاد مجموعه‌ها بر اساس بیت‌ماس.
-        - مجموعه‌هایی که در بیت‌ماس انتخاب شده‌اند را اتحاد می‌کند.
-        """
-        return set().union(*(self.sets[i] for i in range(self.num_sets) if bitmask & (1 << i)))
-
-    def I(self, bitmask):
-        """
-        محاسبه اشتراک مجموعه‌ها بر اساس بیت‌ماس.
-        - تنها مجموعه انتخاب شده در بیت‌ماس را در نظر می‌گیرد.
-        """
-        selected_sets = [self.sets[i] for i in range(self.num_sets) if bitmask & (1 << i)]
-        return set.intersection(*selected_sets)
-
-    def Ms(self, bitmask, target_bit):
-        """
-        محاسبه تفاضل مجموعه:
-        - از مجموعه هدف، سایر مجموعه‌های انتخاب شده (با حذف هدف) را کم می‌کند.
-        """
-        main_set = self.sets[target_bit]
-        other_sets = self.U(bitmask & ~(1 << target_bit))
-        return main_set - other_sets
-
+    #  بررسی تشکیل زنجیره بودن مجموعه های وردی
+    # تشخیص مجموعه هایی که باهم رابطه زیر مجموعه ایی دارند
     def check_other_information(self):
         """
         بررسی اطلاعات دیگر بین مجموعه‌ها از جمله زیرمجموعه بودن و عدم زنجیره‌ای بودن.
@@ -832,6 +829,7 @@ class SetsAlgorithm:
             return str(e)
         text = text.replace('∩', '&').replace('∪', '|')
         fixed_text = SetsAlgorithm.fix_set_variables(text)
+
         try:
             transformed_text = SetsAlgorithm.parse_set_string(fixed_text)
         except ValueError as e:
@@ -842,8 +840,13 @@ class SetsAlgorithm:
             result = eval(transformed_text, {"__builtins__": {}, "frozenset": frozenset, "set": set}, variables)
             return SetsAlgorithm.set_to_str(result)
         except Exception as e:
-            return f"خطا در ارزیابی عبارت:\n{e}"
+            if len(text.strip())==0:
+                return "عبارت  ورودی خالی است"
+            else:
+                return f"خطا در ارزیابی عبارت:\n{e}"
+    
     @staticmethod
+    #  ایجاد حالتی کاربر پسند برای نمایش
     def set_to_str(result):
         """
         تبدیل نتیجه مجموعه به رشته:
@@ -864,7 +867,7 @@ class SetsAlgorithm:
             return "{" + ", ".join(format_item(item) for item in result) + "}"
         else:
             return str(result)
-
+    #  رسم نمودار ون
     def draw_venn(self):
         """
         رسم نمودار ون برای دو یا سه مجموعه.
@@ -966,7 +969,7 @@ class SetsAlgorithm:
         if isinstance(s, (set, frozenset)):
             return frozenset(s)
         return eval(s if isinstance(s, str) else repr(s), {"__builtins__": {}, "frozenset": frozenset})
-
+    #  دریافت اطلاعات هر ناحیه از نمودار ون
     def get_region_info(self):
         """
         محاسبه اطلاعات نواحی نمودار ون:
@@ -1003,9 +1006,12 @@ class SetsAlgorithm:
         return result
 
 # --------------------------------------------------
+#  این کلاس تمامی  ai agent  را کنترل میکند
+# --------------------------------------------------
 
 class init_chat_bot():
     def __init__(self,other_system_message=None):
+        #  این ای پی ای رایگان بوده و به همین دلیل در گیت هاب پوش شده
         configure(api_key="AIzaSyAdKuPHksFTef8Rl1PkFF6jUvgmk4sqiTM")
         if other_system_message:
             self.system_message=other_system_message
@@ -1067,6 +1073,10 @@ class init_chat_bot():
     def clear(self):
         self.chat.history.clear()
         self.chat.history.append({"role": "user", "parts": [{"text": self.system_message}]})
+# --------------------------------------------------
+#  کنترل هوش موصنوعی زبان طبیعی  علاوه بر کلاس بالا با این کلاس نیز صورت میگیرد
+# --------------------------------------------------
+
 class NLP_with_ai():
     def __init__(self,section):
         if section=="set":
@@ -1102,7 +1112,7 @@ class NLP_with_ai():
             return self.NLP.send_message(prompt).text
         except:
             return self.NLP.send_message(prompt)
-
+#  برنامه اصلی
 class App:
 
     def __init__(self):
@@ -1120,6 +1130,7 @@ class App:
             page_icon="",
             initial_sidebar_state="expanded"
         )
+        # لود فونت ها و تصاویر
         with open("data/img/bg.png", "rb") as f:
             bg = base64.b64encode(f.read()).decode("utf-8")
         with open("data/font/YekanBakhFaNum-Fat.woff2", "rb") as f:
@@ -1136,11 +1147,13 @@ class App:
             yekan_regular = base64.b64encode(f.read()).decode("utf-8")
         with open("data/img/file.svg", "rb") as f:
             self.jupiter_logo = base64.b64encode(f.read()).decode("utf-8")
-
+        # به دلیل محدودیت های استریملیت نمیتوانیم ادرس دایرتوری بدیم
+        # این ادرس پس از خرید سرور تغییر خواهد کرد
         st.markdown("""
             <link rel="stylesheet" href="https://mohammad-mahdi-v.github.io/math-help/data/css/all.min.css
 ">
         """, unsafe_allow_html=True)
+        # استایل ها
         st.markdown(f"""
         <style>
         @font-face {{
