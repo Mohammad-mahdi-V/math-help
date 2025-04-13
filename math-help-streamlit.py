@@ -179,13 +179,13 @@ class LineAlgorithm:
             try:
                 
                 if "=" in eq_processed:
-                    # حل معادله
                     left_str, right_str = eq_processed.split("=")
                     left_expr = parse_expr(left_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
                     right_expr = parse_expr(right_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
                     expr = sp.simplify(left_expr - right_expr)
                 else:
                     expr = parse_expr(eq_processed, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+
                 #  بررسی متغیر های موجود
                 allowed = {self.x, self.y}
                 extra_symbols = [str(sym) for sym in expr.free_symbols if sym not in allowed]
@@ -243,7 +243,7 @@ class LineAlgorithm:
                     else:
                         info = f"معادله ضمنی: {sp.pretty(expr)} = 0"
                         return ("implicit", expr, None, None, info)
-
+            
             except Exception as e:
                 return ("error", None, None, None, f"  در تبدیل معادله در صورت مشکل ادامه دار بود با ایمیل ما در ارتباط باشید در اسرع وقت رسیدگی میشود. {e} " )
     def plot(self, equations):
@@ -282,9 +282,8 @@ class LineAlgorithm:
                         func = sp.lambdify(self.x, a * self.x**2 + b_coef * self.x + c, 'numpy')
                         y_vals = func(x_vals)
                         ax.plot(x_vals, y_vals, label=f"{line['name']}: {a}x² + {b_coef}x + {c}")
-                elif line["type"] == "implicit":
-                    expr = line["input"]
-                    expr = expr.replace('^', '**')
+                elif line["type"] == "implicit" or line["type"] == "parabolic" :
+                    expr = line["input"].replace('^', '**')
                     transformations = standard_transformations + (implicit_multiplication_application,)
                     if "=" in expr:
                         left_str, right_str = expr.split("=")
@@ -2403,7 +2402,7 @@ class App:
             })
 
         # افزایش شمارنده و رفرش فرم
-
+        print(st.session_state.registered_lines)
         st.session_state["num_eq"] += 1
         st.session_state["hide_eq_btn"] = False  
         st.session_state["disabled_next_eq_btn"] = False  
