@@ -1,7 +1,6 @@
 import streamlit as st
 import base64
 import time
-start_time = time.time()
 import threading
 import matplotlib.pyplot as plt
 from matplotlib_venn import venn2, venn3
@@ -10,29 +9,17 @@ import venn
 from itertools import combinations
 from more_itertools.more import set_partitions
 import os 
-import types
-from sympy import latex
-from tkinter import messagebox
-import subprocess
-import atexit
-import ctypes
-from sympy import bell
 import string
 import pandas as pd
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
-from streamlit_javascript import st_javascript  # pip install streamlit-javascript
 from matplotlib.ticker import MultipleLocator
-import sys
 import pandas as pd
 from google.generativeai.generative_models import GenerativeModel
 from google.generativeai.client import configure
 import re
-import socket
 import sympy as sp
 import numpy as np
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
-import requests
-import webbrowser
 from io import BytesIO
 import pickle
 
@@ -388,7 +375,9 @@ class LineAlgorithm:
         return m, b
     
 
-
+# --------------------------------------------------
+# این کلاس شامل تمامی توابع مورد نیاز پس از بررسی ورودی برای مجوعه ها است
+# --------------------------------------------------
 class SetsAlgorithm:
     
     def __init__(self, set_of_sets):
