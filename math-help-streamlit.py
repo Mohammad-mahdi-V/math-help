@@ -206,8 +206,6 @@ class LineAlgorithm:
                         deg = sp.degree(sol, self.x)
                     except Exception:
                         deg = None
-                    if deg is not None and deg > 2:
-                        return ("error", None, None, None, "توان x در معادله بیشتر از دو است.")
                     if deg == 1:
                         m = sp.simplify(sol.coeff(self.x))
                         b = sp.simplify(sol.subs(self.x, 0))
@@ -232,8 +230,6 @@ class LineAlgorithm:
                             deg = sp.degree(sol, self.y)
                         except Exception:
                             deg = None
-                        if deg is not None and deg > 2:
-                            return ("error", None, None, None, "توان y در معادله بیشتر از دو است.")
                         if deg == 1:
                             info = f"x = {sp.pretty(sol)}"
                             return ("implicit_x", sol, None, None, info)
@@ -282,7 +278,7 @@ class LineAlgorithm:
                         func = sp.lambdify(self.x, a * self.x**2 + b_coef * self.x + c, 'numpy')
                         y_vals = func(x_vals)
                         ax.plot(x_vals, y_vals, label=f"{line['name']}: {a}x² + {b_coef}x + {c}")
-                elif line["type"] == "implicit" or line["type"] == "parabolic" :
+                elif line["type"] == "implicit" or line["type"] == "parabolic" or line["type"] == "implicit_multiple" :
                     expr = line["input"].replace('^', '**')
                     transformations = standard_transformations + (implicit_multiplication_application,)
                     if "=" in expr:
@@ -2317,7 +2313,6 @@ class App:
         st.session_state["eq_input_main"]=""
         st.session_state["ai_eq_input_answer"]=""
         st.session_state["ai_eq_input_confirmation"]=True
-        self.eq_input=self.eq_input.replace("X","x").replace("Y","y")
         if len(self.name_eq) != 1 or self.name_eq not in string.ascii_letters:
             self.add_notification("نام خط باید تنها یک حرف انگلیسی باشد (مثلاً A).")
             return  False
@@ -2327,6 +2322,7 @@ class App:
             self.add_notification("نام خط تکراری است.")
             return False
         if self.input_type == "معادله":
+            self.eq_input=self.eq_input.replace("X","x").replace("Y","y")
             if not self.eq_input:
                 self.add_notification("لطفاً معادله را وارد کنید.")
                 return
