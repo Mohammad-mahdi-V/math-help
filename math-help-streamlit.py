@@ -247,8 +247,8 @@ class LineAlgorithm:
             # تنظیمات اولیه نمودار
             fig, ax = plt.subplots(figsize=(8, 6))
             x_vals = np.linspace(-20, 20, 400)
-            ax.xaxis.set_major_locator(MultipleLocator(15))
-            ax.yaxis.set_major_locator(MultipleLocator(15))
+            ax.xaxis.set_major_locator(MultipleLocator(10))
+            ax.yaxis.set_major_locator(MultipleLocator(30))
             ax.grid(which='major', linestyle='-', linewidth=0.75)
             ax.grid(which='minor', linestyle=':', linewidth=0.5)
             intersections = []
