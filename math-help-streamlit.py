@@ -2302,128 +2302,6 @@ class App:
             st.session_state["current_section"] = "display_eqs"
             st.rerun()
         self.render_notification(self.notification_placeholder)
-    @staticmethod
-    def safe_rerun():
-        try:
-            st.rerun()
-        except Exception:
-            pass
-
-    def next_eq(self):
-        st.session_state["eq_input_main"]=""
-        st.session_state["ai_eq_input_answer"]=""
-        st.session_state["ai_eq_input_confirmation"]=True
-        if len(self.name_eq) != 1 or self.name_eq not in string.ascii_letters:
-            self.add_notification("نام خط باید تنها یک حرف انگلیسی باشد (مثلاً A).")
-            return  False
-
-        duplicate = any(line["name"] == self.name_eq.upper() for line in st.session_state.registered_lines)
-        if duplicate:
-            self.add_notification("نام خط تکراری است.")
-            return False
-        if self.input_type == "معادله":
-            self.eq_input=self.eq_input.replace("X","x").replace("Y","y")
-            if not self.eq_input:
-                self.add_notification("لطفاً معادله را وارد کنید.")
-                return
-            result = self.calculator.parse_equation(self.eq_input)
-            eq_type = result[0]
-            if eq_type == "error":
-                self.add_notification(result[-1])
-                return False
-            if not self.name_eq.isupper():
-                self.add_notification("نام خط به حروف بزرگ تبدیل شد.", error_type="info")
-                self.name_eq = self.name_eq.upper()
-            if eq_type == "general":
-                _, expr, a, b_coef, c, info = result
-                st.session_state.registered_lines.append({
-                    "name": self.name_eq,
-                    "type": "general",
-                    "a": float(a),
-                    "b_coef": float(b_coef),
-                    "c": float(c),
-                    "input": self.eq_input,
-                    "info": info
-                })
-            elif eq_type == "quadratic":
-                _, sol, a, b_coef, c, delta, info = result
-                st.session_state.registered_lines.append({
-                    "name": self.name_eq,
-                    "type": "quadratic",
-                    "a": float(a),
-                    "b_coef": float(b_coef),
-                    "c": float(c),
-                    "delta": float(delta),
-                    "input": self.eq_input,
-                    "info": info
-                })
-            else:
-                _, sol, m, b, info = result
-                st.session_state.registered_lines.append({
-                    "name": self.name_eq,
-                    "type": eq_type,
-                    "m": float(m) if m is not None else None,
-                    "b": float(b) if b is not None else None,
-                    "input": self.eq_input,
-                    "info": info
-                })
-        else:  # حالت نقطه‌ای
-            if not self.pt1_x or not self.pt1_y or not self.pt2_x or not self.pt2_y:
-                self.add_notification("لطفاً مقدارهای x و y هر دو نقطه را وارد کنید.")
-                return False
-            try:
-                point1 = (float(self.pt1_x), float(self.pt1_y))
-                point2 = (float(self.pt2_x), float(self.pt2_y))
-            except Exception:
-                self.add_notification("فرمت مقادیر عددی صحیح نیست.")
-                return False
-            try:
-                m_val, b_val = self.calculator.calculate_from_points(point1, point2)
-            except Exception as e:
-                self.add_notification(str(e))
-                return False
-            if not self.name_eq.isupper():
-                self.add_notification("نام خط به حروف بزرگ تبدیل شد.", error_type="info")
-                self.name_eq = self.name_eq.upper()
-            distance = abs(b_val) / np.sqrt(m_val**2 + 1)
-            computed_form = f"y = {m_val:.2f}x + {b_val:.2f}"
-            info = f"شیب = {m_val:.2f}، عرض = {b_val:.2f}، فاصله = {distance:.2f}"
-            st.session_state.registered_lines.append({
-                "name": self.name_eq,
-                "type": "linear",
-                "m": float(m_val),
-                "b": float(b_val),
-                "input": computed_form,
-                "info": info
-            })
-
-        # افزایش شمارنده و رفرش فرم
-        print(st.session_state.registered_lines)
-        st.session_state["num_eq"] += 1
-        st.session_state["hide_eq_btn"] = False  
-        st.session_state["disabled_next_eq_btn"] = False  
-        return True
-             
-    def previous_eq(self):
-        st.session_state["eq_input"]=""
-        if st.session_state["registered_lines"]:
-            if "delete_confirmed" not in st.session_state:
-                with self.notification_placeholder.container():
-                    with st.expander("تایید", expanded=True):
-                        st.info("خط قبلی را حذف میکنیم ایا مطمئن هستید")
-                        col1, col2 = st.columns([1, 1])
-                        with col1:
-                            def confirm_delete():
-                                st.session_state["registered_lines"].pop()
-                                st.session_state["num_eq"] = len(st.session_state["registered_lines"]) + 1
-                                st.session_state["disabled_next_set_btn"] = False
-                                if st.session_state["num_eq"]==1:
-                                    st.session_state["hide_eq_btn"]=True
-                            st.button("بله", key="confirm_yes", use_container_width=True, on_click=confirm_delete)
-                        with col2:
-
-                            st.button("خیر", key="confirm_no", use_container_width=True)
-                        
     def about_us(self):
         with st.container(key="us-info"):
             st.markdown("<h1 style= text-align:center;'>اطلاعات تماس </h1>", unsafe_allow_html=True)
@@ -2827,6 +2705,129 @@ class App:
                     """, unsafe_allow_html=True)
 
                     st.write("</div>", unsafe_allow_html=True)
+    @staticmethod
+    def safe_rerun():
+        try:
+            st.rerun()
+        except Exception:
+            pass
+
+    def next_eq(self):
+        st.session_state["eq_input_main"]=""
+        st.session_state["ai_eq_input_answer"]=""
+        st.session_state["ai_eq_input_confirmation"]=True
+        if len(self.name_eq) != 1 or self.name_eq not in string.ascii_letters:
+            self.add_notification("نام خط باید تنها یک حرف انگلیسی باشد (مثلاً A).")
+            return  False
+
+        duplicate = any(line["name"] == self.name_eq.upper() for line in st.session_state.registered_lines)
+        if duplicate:
+            self.add_notification("نام خط تکراری است.")
+            return False
+        if self.input_type == "معادله":
+            self.eq_input=self.eq_input.replace("X","x").replace("Y","y")
+            if not self.eq_input:
+                self.add_notification("لطفاً معادله را وارد کنید.")
+                return
+            result = self.calculator.parse_equation(self.eq_input)
+            eq_type = result[0]
+            if eq_type == "error":
+                self.add_notification(result[-1])
+                return False
+            if not self.name_eq.isupper():
+                self.add_notification("نام خط به حروف بزرگ تبدیل شد.", error_type="info")
+                self.name_eq = self.name_eq.upper()
+            if eq_type == "general":
+                _, expr, a, b_coef, c, info = result
+                st.session_state.registered_lines.append({
+                    "name": self.name_eq,
+                    "type": "general",
+                    "a": float(a),
+                    "b_coef": float(b_coef),
+                    "c": float(c),
+                    "input": self.eq_input,
+                    "info": info
+                })
+            elif eq_type == "quadratic":
+                _, sol, a, b_coef, c, delta, info = result
+                st.session_state.registered_lines.append({
+                    "name": self.name_eq,
+                    "type": "quadratic",
+                    "a": float(a),
+                    "b_coef": float(b_coef),
+                    "c": float(c),
+                    "delta": float(delta),
+                    "input": self.eq_input,
+                    "info": info
+                })
+            else:
+                _, sol, m, b, info = result
+                st.session_state.registered_lines.append({
+                    "name": self.name_eq,
+                    "type": eq_type,
+                    "m": float(m) if m is not None else None,
+                    "b": float(b) if b is not None else None,
+                    "input": self.eq_input,
+                    "info": info
+                })
+        else:  # حالت نقطه‌ای
+            if not self.pt1_x or not self.pt1_y or not self.pt2_x or not self.pt2_y:
+                self.add_notification("لطفاً مقدارهای x و y هر دو نقطه را وارد کنید.")
+                return False
+            try:
+                point1 = (float(self.pt1_x), float(self.pt1_y))
+                point2 = (float(self.pt2_x), float(self.pt2_y))
+            except Exception:
+                self.add_notification("فرمت مقادیر عددی صحیح نیست.")
+                return False
+            try:
+                m_val, b_val = self.calculator.calculate_from_points(point1, point2)
+            except Exception as e:
+                self.add_notification(str(e))
+                return False
+            if not self.name_eq.isupper():
+                self.add_notification("نام خط به حروف بزرگ تبدیل شد.", error_type="info")
+                self.name_eq = self.name_eq.upper()
+            distance = abs(b_val) / np.sqrt(m_val**2 + 1)
+            computed_form = f"y = {m_val:.2f}x + {b_val:.2f}"
+            info = f"شیب = {m_val:.2f}، عرض = {b_val:.2f}، فاصله = {distance:.2f}"
+            st.session_state.registered_lines.append({
+                "name": self.name_eq,
+                "type": "linear",
+                "m": float(m_val),
+                "b": float(b_val),
+                "input": computed_form,
+                "info": info
+            })
+
+        # افزایش شمارنده و رفرش فرم
+        print(st.session_state.registered_lines)
+        st.session_state["num_eq"] += 1
+        st.session_state["hide_eq_btn"] = False  
+        st.session_state["disabled_next_eq_btn"] = False  
+        return True
+             
+    def previous_eq(self):
+        st.session_state["eq_input"]=""
+        if st.session_state["registered_lines"]:
+            if "delete_confirmed" not in st.session_state:
+                with self.notification_placeholder.container():
+                    with st.expander("تایید", expanded=True):
+                        st.info("خط قبلی را حذف میکنیم ایا مطمئن هستید")
+                        col1, col2 = st.columns([1, 1])
+                        with col1:
+                            def confirm_delete():
+                                st.session_state["registered_lines"].pop()
+                                st.session_state["num_eq"] = len(st.session_state["registered_lines"]) + 1
+                                st.session_state["disabled_next_set_btn"] = False
+                                if st.session_state["num_eq"]==1:
+                                    st.session_state["hide_eq_btn"]=True
+                            st.button("بله", key="confirm_yes", use_container_width=True, on_click=confirm_delete)
+                        with col2:
+
+                            st.button("خیر", key="confirm_no", use_container_width=True)
+                        
+    
     def next_set(self):
         st.session_state["set_input"]=""
         st.session_state["ai_set_input_answer"]=""
