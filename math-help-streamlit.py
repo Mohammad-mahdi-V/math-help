@@ -2403,33 +2403,14 @@ class App:
         st.session_state["hide_eq_btn"] = False  
         st.session_state["disabled_next_eq_btn"] = False  
         return True
+             
     def previous_eq(self):
         st.session_state["eq_input"]=""
         if st.session_state["registered_lines"]:
             if "delete_confirmed" not in st.session_state:
                 with self.notification_placeholder.container():
                     with st.expander("تایید", expanded=True):
-                        st.info("مجموعه قبلی را حذف میکنیم ایا مطمئن هستید")
-                        col1, col2 = st.columns([1, 1])
-                        with col1:
-                            def confirm_delete():
-                                st.session_state["registered_lines"].pop()
-                                st.session_state["num_eq"] = len(st.session_state["registered_lines"]) + 1
-                                st.session_state["disabled_next_set_btn"] = False
-                                if st.session_state["num_eq"]==1:
-                                    st.session_state["hide_eq_btn"]=True
-                            st.button("بله", key="confirm_yes", use_container_width=True, on_click=confirm_delete)
-                        with col2:
-
-                            st.button("خیر", key="confirm_no", use_container_width=True)
-                        
-    def previous_eq(self):
-        st.session_state["eq_input"]=""
-        if st.session_state["registered_lines"]:
-            if "delete_confirmed" not in st.session_state:
-                with self.notification_placeholder.container():
-                    with st.expander("تایید", expanded=True):
-                        st.info("مجموعه قبلی را حذف میکنیم ایا مطمئن هستید")
+                        st.info("خط قبلی را حذف میکنیم ایا مطمئن هستید")
                         col1, col2 = st.columns([1, 1])
                         with col1:
                             def confirm_delete():
