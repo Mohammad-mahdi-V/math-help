@@ -23,127 +23,7 @@ from sympy.parsing.sympy_parser import parse_expr, standard_transformations, imp
 from io import BytesIO
 import pickle
 
-# --------------------------------------------------
-#  شناسنایی قدرت سرور برای محاسبات مجموعه
-# --------------------------------------------------
-class Benchmark:
-    BENCHMARK_FILE = "benchmark_results.pkl"
 
-    def __init__(self):
-        self.output_dir = os.path.dirname(os.path.abspath(__file__))  # مسیر داخلی‌ترین پوشه
-        self.max_n_subsets = 0
-        self.max_n_partitions = 0
-        self.execute()
-
-    #  تابع مشابه تابع اصلی در ست الگوریتم
-    def power_set(self, given_set):
-        # تبدیل ورودی به مجموعه اگه مجموعه نباشه
-        if not isinstance(given_set, set):
-            given_set = set(given_set)
-        
-        n = len(given_set)  # تعداد اعضای مجموعه
-        elements = list(given_set)  # تبدیل به لیست برای دسترسی به اندیس‌ها
-        
-        subsets_dict = {f"زیرمجموعه {i} عضوی": [] for i in range(n + 1)}
-        
-        def generate_subsets():
-            for i in range(1 << n):  # از 0 تا 2^n - 1
-                subset = [elements[j] for j in range(n) if (i & (1 << j)) != 0]
-                yield subset
-        
-        for subset in generate_subsets():
-            subset_str = "{" + ", ".join(map(str, subset)) + "}" if subset else "{}"
-            subsets_dict[f"زیرمجموعه {len(subset)} عضوی"].append(subset_str)
-        return subsets_dict
-    # تابع مشابه تابع اصلی در ست الگوریتم
-    def partitions(self, s):
-        partition_list = []
-        partition_loop = 0
-        for partition in set_partitions(s):
-            partition_list.append(partition)
-            partition_loop += 1
-
-        return partition_list
-    # تابع اجرای بنچمارک سابست ها
-    def benchmark_power_set(self):
-        """
-        محاسبه حداکثر تعداد زیرمجموعه‌هایی که در کمتر از یک ثانیه تولید می‌شوند.
-        خروجی: self.max_n_subsets به عنوان تعداد زیرمجموعه‌ها (نه تعداد اعضا)
-        """
-        max_subsets = 0  # حداکثر تعداد زیرمجموعه‌های قابل محاسبه در کمتر از یک ثانیه
-        n = 0
-        while True:
-            n += 1
-            elements = list(range(1, n + 1))
-            start_time = time.time()
-            subsets = self.power_set(elements)  # یا می‌توان از generate_subsets استفاده کرد
-            end_time = time.time()
-            duration = end_time - start_time
-            num_subsets = 1 << n  # تعداد زیرمجموعه‌ها = 2^n
-            if duration > 1.0:
-                break
-            max_subsets = num_subsets
-        self.max_n_subsets = max_subsets
-    # تابع اجرای بنچمارک پارتیشن ها
-    def benchmark_partitions(self):
-        max_n_partitions = 0
-        
-        while True:
-            n = max_n_partitions + 1
-            elements = list(range(1, n + 1))
-            start_time = time.time()
-            partitions = self.partitions(elements)
-            end_time = time.time()
-            duration = end_time - start_time
-
-            if duration > 1.0:
-                break
-            max_n_partitions = n
-
-        self.max_bell=len(partitions)
-        self.max_n_partitions = max_n_partitions
-    #  ذخیره نتیجه بنچمارک برای صرفه جویی در اجرای های بعدی
-    def save_results_pickle(self):
-        # مکس بل حداکثر تعداد افراز ها
-        #مکس ان پارتیشن برای اینکه بدانیم  اخرین مجموعه که میتوانیم تمام افراز های ان را محاسبه کنیم چقدر است
-        data = {
-            "max_n_subsets": self.max_n_subsets,
-            "max_n_partitions": self.max_n_partitions,
-            "max_bell":self.max_bell
-        }
-        file_path = os.path.join(self.output_dir, self.BENCHMARK_FILE)
-        with open(file_path, "wb") as f:
-            pickle.dump(data, f)
-    # خواندن فایل ذخیره شده
-    def load_results_pickle(self):
-        file_path = os.path.join(self.output_dir, self.BENCHMARK_FILE)
-        if os.path.exists(file_path):
-            with open(file_path, "rb") as f:
-                data = pickle.load(f)
-            return data
-        return None
-    # اجرای بنچمارک در دو ترید متفاوت  
-    def run_benchmarks(self):
-        def run_power():
-            self.benchmark_power_set()
-        def run_partitions():
-            self.benchmark_partitions()
-        t1 = threading.Thread(target=run_power)
-        t2 = threading.Thread(target=run_partitions)
-        t1.start()
-        t2.start()
-        t1.join()
-        t2.join()
-    #  تشخیص اینکه ایا از قبل اجرا شده یا خیر
-    def execute(self):
-        benchmark_data = self.load_results_pickle()
-        if benchmark_data is None:
-            self.run_benchmarks()
-            self.save_results_pickle()
-        else:
-            self.max_n_subsets = benchmark_data["max_n_subsets"]
-            self.max_n_partitions = benchmark_data["max_n_partitions"]
-            self.max_bell=benchmark_data["max_bell"]
 # --------------------------------------------------
 # این کلاس شامل تمامی توابع مورد نیاز پس از بررسی ورودی برای خطوط است
 # --------------------------------------------------
@@ -681,38 +561,46 @@ class SetsAlgorithm:
             subsets_dict = {f"زیرمجموعه {i} عضوی": [] for i in range(n + 1)}
             
             def generate_subsets():
+                n = len(elements)
+                start_time = time.time()
+                timeout = False
                 for i in range(1 << n):
-                    subset = [elements[j] for j in range(n) if (i & (1 << j)) != 0]
-                    yield subset
+                    if timeout:
+                        break
+                    subset = []
+                    for j in range(n):
+                        end_time = time.time()
+                        elapsed = end_time - start_time
+                        if elapsed > 1.5:
+                            timeout = True
+                            break
+                        if (i & (1 << j)) != 0:
+                            subset.append(elements[j])
+                    else:
+                        yield subset
             
-            count = 0
             
             for subset in generate_subsets():
                 subset_str = "{" + ", ".join(map(str, subset)) + "}" if subset else "{}"
                 subsets_dict[f"زیرمجموعه {len(subset)} عضوی"].append(subset_str)
-                count += 1
-                
 
-                if count >= benchmark.max_n_subsets:
-                    subsets_dict[f"زیرمجموعه {len(subset)} عضوی"].pop()  # حذف آخرین زیرمجموعه
-                    break
             return subsets_dict
     # یافتن افراز های یک مجموعه
     @staticmethod
     def partitions(given_set):
+        partition_list = []
+        partition_loop = 0
+        start_time=time.time()
+        for partition in set_partitions(given_set):
+            elapsed = time.time() - start_time
+            if elapsed > 1.5:
+                break
+            else :
+                partition_list.append(partition)
+                partition_loop += 1
 
-        if len(given_set) <= benchmark.max_n_partitions:
-            return list(set_partitions(given_set))
-        else:
-            partition_list = []
-            partition_loop = 0
-            for partition in set_partitions(given_set):
-                if partition_loop <= benchmark.max_bell:
-                    partition_list.append(partition)
-                    partition_loop += 1
-                else:
-                    break
-            return partition_list
+                
+        return partition_list
     @staticmethod
     def partitions_to_str(given_set):
         """
@@ -1337,7 +1225,9 @@ class App:
                 box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
                 visibility: visible; 
             }}
-
+            .stSidebar[aria-expanded="false"]{{
+                min-width:0;
+            }}
             section[data-testid="stSidebar"] > div {{
                 overflow-y: auto !important;
                 max-height: 100vh !important;
@@ -3232,5 +3122,4 @@ class App:
                 st.warning("لطفاً حداقل یک خط را انتخاب کنید.")
 if __name__ == "__main__":
     global benchmark
-    benchmark=Benchmark()
     App()
