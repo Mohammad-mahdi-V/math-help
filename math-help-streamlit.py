@@ -158,7 +158,7 @@ class LineAlgorithm:
                         func = sp.lambdify(self.x, a * self.x**2 + b_coef * self.x + c, 'numpy')
                         y_vals = func(x_vals)
                         ax.plot(x_vals, y_vals, label=f"{line['name']}: {a}x² + {b_coef}x + {c}")
-                elif line["type"] == "implicit" or line["type"] == "parabolic" or line["type"] == "implicit_multiple" :
+                elif line["type"] == "implicit" or line["type"] == "parabolic"   :
                     expr = line["input"].replace('^', '**')
                     transformations = standard_transformations + (implicit_multiplication_application,)
                     if "=" in expr:
@@ -173,6 +173,33 @@ class LineAlgorithm:
                     color = colors[i % len(colors)]  # رنگ بر اساس ترتیب
                     ax.contour(x_vals.ravel(), y_vals.ravel(), f(x_vals, y_vals), [0], colors=color)
                     ax.plot([], [], color=color, label=f"{line['name']}: {line['input']}")
+                elif line["type"] == "implicit_multiple":
+                    expr_str = line["input"].replace('^', '**')
+                    transformations = standard_transformations + (implicit_multiplication_application,)
+                    left_str, right_str = expr_str.split("=")
+                    left_expr = parse_expr(left_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                    right_expr = parse_expr(right_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                    expr = sp.simplify(left_expr - right_expr)
+                    sol_y = sp.solve(expr, self.y)
+                    
+                    if sol_y:
+                        n=i
+                        for j, sol in enumerate(sol_y):
+                            try:
+                                sol_rewritten = sol.rewrite(sp.Pow)
+                                func = sp.lambdify(self.x, sol, 'numpy')
+                                x_range = np.linspace(-10, 10, 800)
+                                y_vals = func(x_range)
+                                color = colors[n % len(colors)]  # رنگ بر اساس ترتیب
+
+                                # حذف مقادیر نان و موهومی
+                                y_real = np.real_if_close(y_vals)
+                                mask = np.isreal(y_real) & np.isfinite(y_real)
+                                ax.plot(x_range[mask], y_real[mask], color=color, label=f"{line['name']} - {j+1}: y = ${sp.latex(sol_rewritten)}$")
+                                n+=1
+                            except Exception as e:
+                                st.warning(f"خطا در رسم جواب {j+1} معادله {line['name']}: {e}")
+
                 else:
                     m_line = line.get("m", None)
                     b_line = line.get("b", None)
@@ -2691,7 +2718,6 @@ class App:
             })
 
         # افزایش شمارنده و رفرش فرم
-        print(st.session_state.registered_lines)
         st.session_state["num_eq"] += 1
         st.session_state["hide_eq_btn"] = False  
         st.session_state["disabled_next_eq_btn"] = False  
