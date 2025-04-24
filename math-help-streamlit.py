@@ -300,22 +300,13 @@ class SetsAlgorithm:
     # در تابع validate_input_expression:
     @staticmethod
     # اعتبار سنجی قبل از پردازش محسابات پیشرفته 
-    def validate_input_expression(expression: str):
+    def validate_input_expression(expression: str,valid_char:list):
         """
         اعتبارسنجی عبارت ورودی برای اطمینان از فرمت صحیح قبل از پردازش.
         """
         i = 0
-        open_paren_stack = []
         while i < len(expression):
             char = expression[i]
-            if char == '(':
-                open_paren_stack.append(i)
-
-            elif char == ')':
-                if not open_paren_stack:  
-                    raise ValueError(f"خطا: پرانتز بسته در موقعیت {i} بدون پرانتز باز متناظر.")
-                open_paren_stack.pop()
-            
             if char in "|&-":
                 if i + 1 >= len(expression):
                     raise ValueError("خطا: عبارت نمی‌تواند با عملگر '|'، '&' یا '-' به پایان برسد.")
@@ -325,11 +316,11 @@ class SetsAlgorithm:
                 if j >= len(expression):
                     raise ValueError("خطا: عبارت نمی‌تواند با عملگر '|'، '&' یا '-' به پایان برسد.")
                 next_char = expression[j]
-                if not ( next_char == '-' or next_char == '{' or next_char == '('or (next_char == ')' and open_paren_stack)):
-                        
+                if not ( next_char == '-' or next_char == '{' or next_char == '('or   next_char.upper() in "".join(valid_char)):
                     raise ValueError(
                         f"خطا: بعد از عملگر '{char}' کاراکتر '{next_char}' مجاز نیست. فقط حروف انگلیسی تعریف شده، اعداد، '-' یا '{{' یا '(' مجاز هستند."
                     )
+                    
                 i = j
             else:
                 i += 1
@@ -337,13 +328,12 @@ class SetsAlgorithm:
     @staticmethod
     # امادگی برای ایوال
 
+
     def parse_set_string(s: str) -> str:
         """
         پردازش رشته ورودی مجموعه، تبدیل آن به فرمت قابل‌اجرا در eval
         - پرتاب استثنا در صورت مواجهه با کاراکتر نامعتبر بعد از عملگر
         """
-        print(s,"may")
-
         def parse_expr(s: str, i: int):
             tokens = []
             while i < len(s):
@@ -366,6 +356,7 @@ class SetsAlgorithm:
                     operator = s[i]
                     tokens.append(operator)
                     i += 1
+
                     # بعد از عملگر فقط اجازه داریم حروف، اعداد، '_' یا '{' یا '(' بیاید
                     if not (s[i].isalnum() or s[i] == '_' or s[i] == '{' or s[i] == '('):
                         error_char = s[i]
@@ -376,6 +367,7 @@ class SetsAlgorithm:
                 elif s[i] == ')':
                     # زمانی که ')' در داخل یک سطح بازگشتی ظاهر شود، به پردازش خاتمه می‌دهیم.
                     break
+
                 else:
                     # پردازش توکن‌های متشکل از حروف، اعداد و '_'
                     if not (s[i].isalnum() or s[i] == '_'):
@@ -427,7 +419,6 @@ class SetsAlgorithm:
             return set_str, i
 
         parsed_expression, _ = parse_expr(s, 0)
-        print(parsed_expression)
         return parsed_expression
 
     # درست کردن ایراد هایی در اعضای مجموعه که میتوانند مشکل ساز باشند
@@ -440,8 +431,8 @@ class SetsAlgorithm:
         - اعداد با صفر پیشرو (مثل {09}) به عدد صحیح تبدیل می‌شوند.
         - اگر عملگرهایی مانند &، | یا - داخل {} باشند، آن‌ها را داخل کوتیشن قرار می‌دهد.
         - همه پرانتزها (چه به صورت جفت و چه تنها) بدون پردازش محتوایشان به عنوان یک استرینگ در نظر گرفته می‌شوند.
+        - در صورتی که بعد از عملگر '-', '|', '&' کاراکتری بیاید که انگلیسی، عدد یا '_' نباشد، آن را با ' {}' (مجموعه تهی با فاصله) جایگزین می‌کند.
         """
-
         result = []
         token = ""
         brace_level = 0
@@ -553,6 +544,89 @@ class SetsAlgorithm:
             result.append(fixed_token)
         return "".join(result)
 
+
+
+
+    def check_variable_depths(self, expression: str) -> dict:
+        """
+        بررسی عمق هر متغیر در عبارت.
+        متغیرهایی که در بخش‌های کوتیشن قرار دارند، نادیده گرفته می‌شوند.
+        این تابع یک دیکشنری برمی‌گرداند که کلید آن نام متغیر و مقدار آن لیستی از عمق‌های حضور آن در عبارت است.
+        """
+        depths = {}
+        current_depth = 0
+        i = 0
+        while i < len(expression):
+            ch = expression[i]
+            if ch == '"':
+                i += 1
+                while i < len(expression) and expression[i] != '"':
+                    i += 1
+                i += 1
+                continue
+            elif ch == '{':
+                current_depth += 1
+                i += 1
+                continue
+            elif ch == '}':
+                current_depth -= 1
+                i += 1
+                continue
+            elif ch.isalpha() or ch == '_':
+                start = i
+                while i < len(expression) and (expression[i].isalnum() or expression[i] == '_'):
+                    i += 1
+                token = expression[start:i]
+                if token not in depths:
+                    depths[token] = []
+                depths[token].append(current_depth)
+                continue
+            else:
+                i += 1
+        return depths
+
+    def U_I_Ms_advance(self, text: str) -> str:
+        """
+        محاسبه ادونس با بررسی عمق متغیرهای موجود در عبارت.
+        در این تابع:
+        - ابتدا علائم ∩ و ∪ به معادل‌های Python تبدیل می‌شوند.
+        - متغیرهای داخل مجموعه‌ها با استفاده از fix_set_variables اصلاح می‌شوند.
+        - عمق هر متغیر در عبارت محاسبه می‌شود. اگر متغیری یا در هیچ عمقی (یعنی خارج از {}) ظاهر شده باشد یا تعریف نشده باشد، خطا داده می‌شود.
+        - در نهایت عبارت پردازش و نتیجه بازگردانده می‌شود.
+        - اعتبارسنجی عبارت ورودی و مدیریت خطای کامل اضافه شده است.
+        """
+        try:
+            SetsAlgorithm.validate_input_expression(text,self.set_names)
+        except ValueError as e:
+            return str(e)
+        text = text.replace('∩', '&').replace('∪', '|')
+
+        # بررسی عمق متغیرها
+        var_depths = self.check_variable_depths(text)
+        for var, depths in var_depths.items():
+            # اگر متغیر تعریف نشده باشد
+            if var.upper() not in self.set_of_sets:
+                return f"متغیر '{var}' تعریف نشده است!"
+            # اگر متغیر تنها در عمق 0 (خارج از مجموعه‌ها) ظاهر شده باشد
+            if all(d == 0 for d in depths):
+                if var.upper() not in self.set_of_sets:
+                    return f"متغیر '{var}' تعریف نشده است!"
+        # تبدیل عبارت به فرمت مناسب برای eval
+        transformed_text = SetsAlgorithm.parse_set_string(text)
+        # آماده‌سازی دیکشنری متغیرها (با توجه به اینکه ممکن است نام‌ها به حروف کوچک نیز مورد استفاده قرار گیرند)
+        variables = {name: frozenset(set_val) for name, set_val in self.set_of_sets.items()}
+        variables.update({name.lower(): frozenset(set_val) for name, set_val in self.set_of_sets.items()})
+
+        try:
+            result = eval(transformed_text, {"__builtins__": {}, "frozenset": frozenset}, variables)
+            return self.set_to_str(result)
+        except Exception as e:
+            if len(text.strip())==0:
+                return "عبارت  ورودی خالی است"
+            else:
+                return f"خطا در ارزیابی عبارت:\n{e}"
+    
+
     @staticmethod
     # تشخیص مجموعه های تو در تو
     def to_frozenset(obj):
@@ -587,8 +661,6 @@ class SetsAlgorithm:
             
             
             for subset in generate_subsets():
-                print(type(subset))
-                print()
                 subset_str = SetsAlgorithm.set_to_str(set(subset))
                 subsets_dict[f"زیرمجموعه {len(subset)} عضوی"].append(subset_str)
             return subsets_dict
@@ -651,89 +723,6 @@ class SetsAlgorithm:
         info["all_sets_antychain"] = not info["all_sets_chain"]
         return info
 
-
-
-
-    def check_variable_depths(self, expression: str) -> dict:
-        """
-        بررسی عمق هر متغیر در عبارت.
-        متغیرهایی که در بخش‌های کوتیشن قرار دارند، نادیده گرفته می‌شوند.
-        این تابع یک دیکشنری برمی‌گرداند که کلید آن نام متغیر و مقدار آن لیستی از عمق‌های حضور آن در عبارت است.
-        """
-        depths = {}
-        current_depth = 0
-        i = 0
-        while i < len(expression):
-            ch = expression[i]
-            if ch == '"':
-                i += 1
-                while i < len(expression) and expression[i] != '"':
-                    i += 1
-                i += 1
-                continue
-            elif ch == '{':
-                current_depth += 1
-                i += 1
-                continue
-            elif ch == '}':
-                current_depth -= 1
-                i += 1
-                continue
-            elif ch.isalpha() or ch == '_':
-                start = i
-                while i < len(expression) and (expression[i].isalnum() or expression[i] == '_'):
-                    i += 1
-                token = expression[start:i]
-                if token not in depths:
-                    depths[token] = []
-                depths[token].append(current_depth)
-                continue
-            else:
-                i += 1
-        return depths
-
-    def U_I_Ms_advance(self, text: str) -> str:
-        """
-        محاسبه ادونس با بررسی عمق متغیرهای موجود در عبارت.
-        در این تابع:
-        - ابتدا علائم ∩ و ∪ به معادل‌های Python تبدیل می‌شوند.
-        - متغیرهای داخل مجموعه‌ها با استفاده از fix_set_variables اصلاح می‌شوند.
-        - عمق هر متغیر در عبارت محاسبه می‌شود. اگر متغیری یا در هیچ عمقی (یعنی خارج از {}) ظاهر شده باشد یا تعریف نشده باشد، خطا داده می‌شود.
-        - در نهایت عبارت پردازش و نتیجه بازگردانده می‌شود.
-        - اعتبارسنجی عبارت ورودی و مدیریت خطای کامل اضافه شده است.
-        """
-        try:
-            SetsAlgorithm.validate_input_expression(text)
-        except ValueError as e:
-            return str(e)
-        text = text.replace('∩', '&').replace('∪', '|')
-        fixed_text = SetsAlgorithm.fix_set_variables(text)
-
-        # بررسی عمق متغیرها
-        var_depths = self.check_variable_depths(fixed_text)
-        for var, depths in var_depths.items():
-            # اگر متغیر تعریف نشده باشد
-            if var.upper() not in self.set_of_sets:
-                return f"متغیر '{var}' تعریف نشده است!"
-            # اگر متغیر تنها در عمق 0 (خارج از مجموعه‌ها) ظاهر شده باشد
-            if all(d == 0 for d in depths):
-                if var.upper() not in self.set_of_sets:
-                    return f"متغیر '{var}' تعریف نشده است!"
-        # تبدیل عبارت به فرمت مناسب برای eval
-        transformed_text = SetsAlgorithm.parse_set_string(fixed_text)
-        # آماده‌سازی دیکشنری متغیرها (با توجه به اینکه ممکن است نام‌ها به حروف کوچک نیز مورد استفاده قرار گیرند)
-        variables = {name: frozenset(set_val) for name, set_val in self.set_of_sets.items()}
-        variables.update({name.lower(): frozenset(set_val) for name, set_val in self.set_of_sets.items()})
-
-        try:
-            result = eval(transformed_text, {"__builtins__": {}, "frozenset": frozenset}, variables)
-            return self.set_to_str(result)
-        except Exception as e:
-            if len(text.strip())==0:
-                return "عبارت  ورودی خالی است"
-            else:
-                return f"خطا در ارزیابی عبارت:\n{e}"
-    
     @staticmethod
     #  ایجاد حالتی کاربر پسند برای نمایش
     def set_to_str(result):
@@ -3046,7 +3035,23 @@ class App:
                         self.calc_sets()
                 
     def calc_sets(self):
-        fixed_set = SetsAlgorithm.fix_set_variables(str(self.calc_input))
+        text=str(self.calc_input)
+        for n,i in enumerate(text):
+            words=[]
+            if i=="{":
+                words.append(i)
+                deep=1
+                for j in text[n+1:]:
+                    if j=="{":
+                        deep+=1
+                    elif j=="}":
+                        words.append(j)
+                        deep-=1
+                        if deep==0:
+                            text=text.replace(''.join(words),(SetsAlgorithm.fix_set_variables(''.join(words))))
+                    words.append(j)
+        
+        fixed_set = text
         result = self.sets.U_I_Ms_advance(fixed_set)
         st.session_state["calc_result"] = result
         st.rerun()
