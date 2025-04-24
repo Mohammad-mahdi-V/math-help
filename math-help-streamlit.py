@@ -587,9 +587,10 @@ class SetsAlgorithm:
             
             
             for subset in generate_subsets():
-                subset_str = "{" + ", ".join(map(str, subset)) + "}" if subset else "{}"
+                print(type(subset))
+                print()
+                subset_str = SetsAlgorithm.set_to_str(set(subset))
                 subsets_dict[f"زیرمجموعه {len(subset)} عضوی"].append(subset_str)
-
             return subsets_dict
     # یافتن افراز های یک مجموعه
     @staticmethod
@@ -622,8 +623,8 @@ class SetsAlgorithm:
             subset_strs = []
             for subset in partition:
                 # تبدیل tuple به رشته با آکولاد
-                subset_str = "{" + ", ".join(map(str, subset)) + "}"
-                subset_strs.append(SetsAlgorithm.set_to_str(eval(subset_str, {"__builtins__": {}, "frozenset": frozenset})))
+                subset_str = SetsAlgorithm.set_to_str(set(subset))
+                subset_strs.append(subset_str)
             # اتصال زیرمجموعه‌ها با جداکننده
             partitions_str.append(" | ".join(subset_strs))
         return partitions_str
@@ -2932,7 +2933,7 @@ class App:
             # ایجاد DataFrame همراه با شماره‌گذاری
             df_subsets = pd.DataFrame({
                 "شماره": range(1, len(subset_list) + 1),  # شماره‌گذاری
-                "زیرمجموعه": [SetsAlgorithm.set_to_str(eval(s[1], {"__builtins__": {}, "frozenset": frozenset}))  for s in subset_list],  # مقدار زیرمجموعه
+                "زیرمجموعه": [s[1] for s in subset_list],  # مقدار زیرمجموعه
                 "نوع زیرمجموعه": [s[0] for s in subset_list]  # نام دسته زیرمجموعه (n عضوی)
             })
             with col1.expander("زیر مجموعه ها"):
