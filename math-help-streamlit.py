@@ -2934,8 +2934,7 @@ class App:
             self.selected_option = self.more_opition.selectbox("انتخاب مجموعه یا بخش", menu_options)
         if self.selected_option in set_of_sets:
             selected_set=set_of_sets[self.selected_option]
-            transformed = SetsAlgorithm.parse_set_string(SetsAlgorithm.fix_set_variables(str(selected_set)))
-            evaluated = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
+            evaluated = eval(str(selected_set), {"__builtins__": {}, "frozenset": frozenset})
             set_obj = SetsAlgorithm.to_frozenset(evaluated)
             col1,col2,col3=st.columns([2,3,1])
             col1.write(f"نام مجموعه : {self.selected_option}")
