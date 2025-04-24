@@ -342,6 +342,8 @@ class SetsAlgorithm:
         پردازش رشته ورودی مجموعه، تبدیل آن به فرمت قابل‌اجرا در eval
         - پرتاب استثنا در صورت مواجهه با کاراکتر نامعتبر بعد از عملگر
         """
+        print(s,"may")
+
         def parse_expr(s: str, i: int):
             tokens = []
             while i < len(s):
@@ -349,10 +351,6 @@ class SetsAlgorithm:
                     i += 1
                     continue
                 if s[i] == '{':
-                    if s[i:i+2] == '{}':  # تشخیص مستقیم مجموعه تهی
-                        tokens.append('set()')
-                        i += 2
-                        continue
                     parsed_set, i = parse_set(s, i)
                     tokens.append(parsed_set)
                 elif s[i] == '(':
@@ -368,15 +366,8 @@ class SetsAlgorithm:
                     operator = s[i]
                     tokens.append(operator)
                     i += 1
-                    if i >= len(s):
-                        tokens.append('set()')
-                        break
-                    elif s[i] == '}':
-                        tokens.append('set()')
-                        i += 1
-                        continue
                     # بعد از عملگر فقط اجازه داریم حروف، اعداد، '_' یا '{' یا '(' بیاید
-                    elif not (s[i].isalnum() or s[i] == '_' or s[i] == '{' or s[i] == '('):
+                    if not (s[i].isalnum() or s[i] == '_' or s[i] == '{' or s[i] == '('):
                         error_char = s[i]
                         raise ValueError(
                             f"خطا: بعد از عملگر '{operator}' کاراکتر '{error_char}' مجاز نیست. فقط حروف انگلیسی، اعداد، '_' یا '{{' مجاز هستند."
@@ -385,10 +376,6 @@ class SetsAlgorithm:
                 elif s[i] == ')':
                     # زمانی که ')' در داخل یک سطح بازگشتی ظاهر شود، به پردازش خاتمه می‌دهیم.
                     break
-                elif s[i] == '}':
-                    tokens.append('set()')
-                    i += 1
-                    continue
                 else:
                     # پردازش توکن‌های متشکل از حروف، اعداد و '_'
                     if not (s[i].isalnum() or s[i] == '_'):
@@ -440,8 +427,7 @@ class SetsAlgorithm:
             return set_str, i
 
         parsed_expression, _ = parse_expr(s, 0)
-        if parsed_expression == '{}':
-            return 'set()'
+        print(parsed_expression)
         return parsed_expression
 
     # درست کردن ایراد هایی در اعضای مجموعه که میتوانند مشکل ساز باشند
@@ -454,8 +440,8 @@ class SetsAlgorithm:
         - اعداد با صفر پیشرو (مثل {09}) به عدد صحیح تبدیل می‌شوند.
         - اگر عملگرهایی مانند &، | یا - داخل {} باشند، آن‌ها را داخل کوتیشن قرار می‌دهد.
         - همه پرانتزها (چه به صورت جفت و چه تنها) بدون پردازش محتوایشان به عنوان یک استرینگ در نظر گرفته می‌شوند.
-        - در صورتی که بعد از عملگر '-', '|', '&' کاراکتری بیاید که انگلیسی، عدد یا '_' نباشد، آن را با ' {}' (مجموعه تهی با فاصله) جایگزین می‌کند.
         """
+
         result = []
         token = ""
         brace_level = 0
@@ -570,14 +556,7 @@ class SetsAlgorithm:
     @staticmethod
     # تشخیص مجموعه های تو در تو
     def to_frozenset(obj):
-        """
-        تبدیل یک شی (در صورت اینکه مجموعه یا frozenset باشد) به frozenset.
-        این تابع به صورت بازگشتی روی عناصر اعمال می‌شود.
-        """
-        if isinstance(obj, (set, frozenset)):
-            return frozenset(SetsAlgorithm.to_frozenset(x) for x in obj)
         return obj
-
     @staticmethod
     #  زیر مجموعه های یک مجموعه
     def subsets_one_set(given_set):
@@ -644,7 +623,7 @@ class SetsAlgorithm:
             for subset in partition:
                 # تبدیل tuple به رشته با آکولاد
                 subset_str = "{" + ", ".join(map(str, subset)) + "}"
-                subset_strs.append(subset_str)
+                subset_strs.append(SetsAlgorithm.set_to_str(eval(subset_str, {"__builtins__": {}, "frozenset": frozenset})))
             # اتصال زیرمجموعه‌ها با جداکننده
             partitions_str.append(" | ".join(subset_strs))
         return partitions_str
@@ -2934,8 +2913,7 @@ class App:
             self.selected_option = self.more_opition.selectbox("انتخاب مجموعه یا بخش", menu_options)
         if self.selected_option in set_of_sets:
             selected_set=set_of_sets[self.selected_option]
-            transformed = SetsAlgorithm.parse_set_string(SetsAlgorithm.fix_set_variables(str(selected_set)))
-            evaluated = eval(transformed, {"__builtins__": {}, "frozenset": frozenset})
+            evaluated = eval(str(selected_set), {"__builtins__": {}, "frozenset": frozenset})
             set_obj = SetsAlgorithm.to_frozenset(evaluated)
             col1,col2,col3=st.columns([2,3,1])
             col1.write(f"نام مجموعه : {self.selected_option}")
@@ -2954,7 +2932,7 @@ class App:
             # ایجاد DataFrame همراه با شماره‌گذاری
             df_subsets = pd.DataFrame({
                 "شماره": range(1, len(subset_list) + 1),  # شماره‌گذاری
-                "زیرمجموعه": [s[1] for s in subset_list],  # مقدار زیرمجموعه
+                "زیرمجموعه": [SetsAlgorithm.set_to_str(eval(s[1], {"__builtins__": {}, "frozenset": frozenset}))  for s in subset_list],  # مقدار زیرمجموعه
                 "نوع زیرمجموعه": [s[0] for s in subset_list]  # نام دسته زیرمجموعه (n عضوی)
             })
             with col1.expander("زیر مجموعه ها"):
