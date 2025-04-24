@@ -2612,9 +2612,30 @@ class App:
             return False
         if self.input_type == "معادله":
             self.eq_input=self.eq_input.replace("X","x").replace("Y","y")
+            self.eq_input=self.eq_input.replace(" ","")
+
             if not self.eq_input:
                 self.add_notification("لطفاً معادله را وارد کنید.")
-                return
+                return False
+            if "x" not in self.eq_input and "y" not in (self.eq_input):
+                self.add_notification("معادله وارد شده باید حداقل شامل یکی از حروف ایکس و وای باشد")
+                return False
+            term_pattern = r'(?:\d+(?:\.\d+)?[xy]?|[xy])'
+            operator_pattern = r'[\+\-\*/\^]'
+            expression_pattern = fr'^{term_pattern}({operator_pattern}{term_pattern})*$'
+
+            if self.eq_input.count("=")>1 :
+                self.add_notification("شما نمیتوانید بیش از یک مساوی در معادله استفاده کنید")
+                return False            
+            if "=" in  self.eq_input:
+                left, right = self.eq_input.split('=')
+                if re.fullmatch(expression_pattern, left) is  None or re.fullmatch(expression_pattern, right) is None:
+                    self.add_notification("عبارت وارد شده یک معادله نیست")
+                    return False
+            else:
+                if re.fullmatch(expression_pattern, self.eq_input) is None :
+                    self.add_notification("عبارت وارد شده یک معادله نیست")
+                    return False
             result = self.calculator.parse_equation(self.eq_input)
             eq_type = result[0]
             if eq_type == "error":
