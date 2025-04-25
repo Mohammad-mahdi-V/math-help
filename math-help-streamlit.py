@@ -2824,7 +2824,7 @@ class App:
 
     def display_table(self):
         # نمایش جدول مجموعه‌ها
-        if st.session_state["sets_data"]:
+        if st.session_state["sets_data"] :
             self.df_sets = pd.DataFrame(st.session_state["sets_data"])
             st.subheader("جدول مجموعه‌های ثبت‌شده")
             st.data_editor(
@@ -2960,6 +2960,7 @@ class App:
                 st.dataframe(df_part,hide_index=True,use_container_width=True)
             if st.session_state["num_sets"]==1 and  st.session_state["show_advanced"]:
                 with st.expander("محاسبه",expanded=True):
+                    self.display_table()
                     with st.form("clac_form",enter_to_submit=False):
                         self.calc_input=st.text_input("عبارت مورد نظر را وارد کنید",key="calc_input",help="شما میتوانید از نام مجموعه ها برای مختصر نویسی استفاده کنید اگر نام دیگری استفاده کنید با ارور مواجه خواید شد و برای اشتراک از & و برای اجتماع از | استفاده کنید")
                         col2,col1=st.columns(2)
@@ -3047,6 +3048,7 @@ class App:
 
             if  st.session_state["show_advanced"]:
                 with st.expander("محاسبه",expanded=True):
+                    self.display_table()
                     with st.form("clac_form",enter_to_submit=False):
                         self.calc_input=st.text_input("عبارت مورد نظر را وارد کنید",key="calc_input",help="شما میتوانید از نام مجموعه ها برای مختصر نویسی استفاده کنید اگر نام دیگری استفاده کنید با ارور مواجه خواید شد و برای اشتراک از & و برای اجتماع از | استفاده کنید")
                         col2,col1=st.columns(2)
