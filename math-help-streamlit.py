@@ -122,130 +122,247 @@ class LineAlgorithm:
             
             except Exception as e:
                 return ("error", None, None, None, f"  در تبدیل معادله در صورت مشکل ادامه دار بود با ایمیل ما در ارتباط باشید در اسرع وقت رسیدگی میشود. {e} " )
-    def plot(self, equations):
-            # رسم نمودار
-            # تنظیمات اولیه نمودار
-            fig, ax = plt.subplots(figsize=(8, 6))
-            x_vals = np.linspace(-20, 20, 400)
-            ax.xaxis.set_major_locator(MultipleLocator(10))
-            ax.yaxis.set_major_locator(MultipleLocator(30))
-            ax.grid(which='major', linestyle='-', linewidth=0.75)
-            ax.grid(which='minor', linestyle=':', linewidth=0.5)
-            intersections = []
-            letter_index = 0
-            colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-            for i, line in enumerate(equations):
-                # رسم بر اساس نوع خط
-                if line.get("type", "linear") in ["general", "quadratic"]:
-                    if line["type"] == "general":
-                        a = line["a"]
-                        b_coef = line["b_coef"]
-                        c = line["c"]
-                        if b_coef != 0:
-                            m_line = -a / b_coef
-                            intercept = -c / b_coef
-                            y_vals = m_line * x_vals + intercept
-                            ax.plot(x_vals, y_vals, label=f"{line['name']}: y = {m_line:.2f}x + {intercept:.2f}")
-                        else:
-                            x_vert = -c / a
-                            ax.axvline(x=x_vert, color='blue', label=f"{line['name']}: x = {x_vert:.2f}")
 
-                    # سایر موارد (خطی، چندجمله‌ای و ...) مانند قبل
+    def calculate_domain(self, expr, var, default_range=10):
+        """محاسبه دامنه مناسب برای رسم بر اساس معادله"""
+        try:
+            # تلاش برای پیدا کردن ریشه‌ها یا نقاط بحرانی
+            if var == self.x:
+                sol = sp.solve(expr, self.x)
+            else:
+                sol = sp.solve(expr, self.y)
+            real_sols = [float(s) for s in sol if s.is_real and s.is_finite]
+            if real_sols:
+                min_val = min(real_sols) - 2  # حاشیه اضافه
+                max_val = max(real_sols) + 2
+                return min(min_val, -default_range), max(max_val, default_range)
+            # اگر ریشه‌ای نبود، از مشتق برای یافتن نقاط بحرانی استفاده کن
+            deriv = sp.diff(expr, var)
+            critical_points = sp.solve(deriv, var)
+            real_critical = [float(p) for p in critical_points if p.is_real and p.is_finite]
+            if real_critical:
+                min_val = min(real_critical) - 2
+                max_val = max(real_critical) + 2
+                return min(min_val, -default_range), max(max_val, default_range)
+            # دامنه پیش‌فرض
+            return -default_range, default_range
+        except:
+            return -default_range, default_range
+
+    def plot(self, equations):
+        # رسم نمودار
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.grid(which='major', linestyle='-', linewidth=0.75)
+        ax.grid(which='minor', linestyle=':', linewidth=0.5)
+        intersections = []
+        letter_index = 0
+        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+        # محاسبه دامنه پویا برای هر معادله
+        x_min, x_max = float('inf'), float('-inf')
+        y_min, y_max = float('inf'), float('-inf')
+
+        for line in equations:
+            expr_str = line["input"].replace('^', '**')
+            transformations = standard_transformations + (implicit_multiplication_application,)
+            if "=" in expr_str:
+                left_str, right_str = expr_str.split("=")
+                left_expr = parse_expr(left_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                right_expr = parse_expr(right_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                expr = sp.simplify(left_expr - right_expr)
+            else:
+                expr = parse_expr(expr_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+
+            # محاسبه دامنه برای x و y
+            x_min_line, x_max_line = self.calculate_domain(expr, self.x)
+            y_min_line, y_max_line = self.calculate_domain(expr, self.y)
+            x_min = min(x_min, x_min_line)
+            x_max = max(x_max, x_max_line)
+            y_min = min(y_min, y_min_line)
+            y_max = max(y_max, y_max_line)
+
+        # تنظیم دامنه نهایی
+        x_vals = np.linspace(x_min, x_max, 400)
+        y_vals_grid, x_vals_grid = np.ogrid[y_min:y_max:200j, x_min:x_max:200j]
+
+        for i, line in enumerate(equations):
+            # رسم بر اساس نوع خط
+            if line.get("type", "linear") in ["general", "quadratic"]:
+                if line["type"] == "general":
+                    a = line["a"]
+                    b_coef = line["b_coef"]
+                    c = line["c"]
+                    if b_coef != 0:
+                        m_line = -a / b_coef
+                        intercept = -c / b_coef
+                        y_vals = m_line * x_vals + intercept
+                        ax.plot(x_vals, y_vals, label=f"{line['name']}: y = {m_line:.2f}x + {intercept:.2f}")
                     else:
-                        a = line["a"]
-                        b_coef = line["b_coef"]
-                        c = line["c"]
-                        func = sp.lambdify(self.x, a * self.x**2 + b_coef * self.x + c, 'numpy')
-                        y_vals = func(x_vals)
-                        ax.plot(x_vals, y_vals, label=f"{line['name']}: {a}x² + {b_coef}x + {c}")
-                elif line["type"] == "implicit" or line["type"] == "parabolic"   :
-                    expr = line["input"].replace('^', '**')
-                    transformations = standard_transformations + (implicit_multiplication_application,)
-                    if "=" in expr:
-                        left_str, right_str = expr.split("=")
+                        x_vert = -c / a
+                        ax.axvline(x=x_vert, color='blue', label=f"{line['name']}: x = {x_vert:.2f}")
+                else:
+                    a = line["a"]
+                    b_coef = line["b_coef"]
+                    c = line["c"]
+                    func = sp.lambdify(self.x, a * self.x**2 + b_coef * self.x + c, 'numpy')
+                    y_vals = func(x_vals)
+                    ax.plot(x_vals, y_vals, label=f"{line['name']}: {a}x² + {b_coef}x + {c}")
+
+            elif line["type"] == "implicit" or line["type"] == "parabolic":
+                expr = line["input"].replace('^', '**')
+                transformations = standard_transformations + (implicit_multiplication_application,)
+                if "=" in expr:
+                    left_str, right_str = expr.split("=")
+                    left_expr = parse_expr(left_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                    right_expr = parse_expr(right_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                    expr = sp.simplify(left_expr - right_expr)
+                else:
+                    expr = parse_expr(expr, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                f = sp.lambdify((self.x, self.y), expr, 'numpy')
+                color = colors[i % len(colors)]
+                ax.contour(x_vals_grid.ravel(), y_vals_grid.ravel(), f(x_vals_grid, y_vals_grid), [0], colors=color)
+                ax.plot([], [], color=color, label=f"{line['name']}: {line['input']}")
+
+            elif line["type"] == "implicit_multiple":
+                expr_str = line["input"].replace('^', '**')
+                transformations = standard_transformations + (implicit_multiplication_application,)
+                left_str, right_str = expr_str.split("=")
+                left_expr = parse_expr(left_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                right_expr = parse_expr(right_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                expr = sp.simplify(left_expr - right_expr)
+                sol_y = sp.solve(expr, self.y)
+                if sol_y:
+                    n = i
+                    for j, sol in enumerate(sol_y):
+                        try:
+                            sol_rewritten = sol.rewrite(sp.Pow)
+                            func = sp.lambdify(self.x, sol, 'numpy')
+                            y_vals = func(x_vals)
+                            color = colors[n % len(colors)]
+                            y_real = np.real_if_close(y_vals)
+                            mask = np.isreal(y_real) & np.isfinite(y_real)
+                            ax.plot(x_vals[mask], y_real[mask], color=color, label=f"{line['name']} - {j+1}: y = ${sp.latex(sol_rewritten)}$")
+                            n += 1
+                        except Exception as e:
+                            st.warning(f"خطا در رسم جواب {j+1} معادله {line['name']}: {e}")
+
+            elif line["type"] == "curve":
+                expr_str = line["input"]
+                expr_str = expr_str.replace('^', '**')
+                transformations = standard_transformations + (implicit_multiplication_application,)
+                try:
+                    if "=" in expr_str:
+                        left_str, right_str = expr_str.split("=")
                         left_expr = parse_expr(left_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
                         right_expr = parse_expr(right_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
                         expr = sp.simplify(left_expr - right_expr)
                     else:
-                        expr = parse_expr(expr, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
-                    f = sp.lambdify((self.x, self.y), expr, 'numpy')
-                    y_vals, x_vals = np.ogrid[-5:5:100j, -5:5:100j]  # دامنه کوچک‌تر برای توان‌های بالا
-                    color = colors[i % len(colors)]  # رنگ بر اساس ترتیب
-                    ax.contour(x_vals.ravel(), y_vals.ravel(), f(x_vals, y_vals), [0], colors=color)
-                    ax.plot([], [], color=color, label=f"{line['name']}: {line['input']}")
-                elif line["type"] == "implicit_multiple":
-                    expr_str = line["input"].replace('^', '**')
-                    transformations = standard_transformations + (implicit_multiplication_application,)
-                    left_str, right_str = expr_str.split("=")
-                    left_expr = parse_expr(left_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
-                    right_expr = parse_expr(right_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
-                    expr = sp.simplify(left_expr - right_expr)
+                        expr = parse_expr(expr_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+
+                    sol_x = sp.solve(expr, self.x)
                     sol_y = sp.solve(expr, self.y)
-                    
+
                     if sol_y:
-                        n=i
                         for j, sol in enumerate(sol_y):
                             try:
                                 sol_rewritten = sol.rewrite(sp.Pow)
                                 func = sp.lambdify(self.x, sol, 'numpy')
-                                x_range = np.linspace(-10, 10, 800)
-                                y_vals = func(x_range)
-                                color = colors[n % len(colors)]  # رنگ بر اساس ترتیب
-
-                                # حذف مقادیر نان و موهومی
+                                y_vals = func(x_vals)
                                 y_real = np.real_if_close(y_vals)
                                 mask = np.isreal(y_real) & np.isfinite(y_real)
-                                ax.plot(x_range[mask], y_real[mask], color=color, label=f"{line['name']} - {j+1}: y = ${sp.latex(sol_rewritten)}$")
-                                n+=1
+                                color = colors[(i + j) % len(colors)]
+                                ax.plot(x_vals[mask], y_real[mask], color=color, 
+                                        label=f"{line['name']} - y{j+1}: y = ${sp.latex(sol_rewritten)}$")
                             except Exception as e:
-                                st.warning(f"خطا در رسم جواب {j+1} معادله {line['name']}: {e}")
+                                st.warning(f"خطا در رسم جواب y{j+1} معادله {line['name']}: {e}")
 
-                else:
-                    m_line = line.get("m", None)
-                    b_line = line.get("b", None)
-                    if m_line is None or b_line is None:
-                        expr_str = line["input"]
-                        if expr_str.lower().startswith("y="):
-                            expr_str = expr_str[2:]
-                        try:
-                            func = sp.lambdify(self.x, sp.sympify(expr_str, locals={'x': self.x, 'y': self.y}), 'numpy')
-                            y_vals = func(x_vals)
-                            ax.plot(x_vals, y_vals, label=f"{line['name']}: {line['input']}")
-                        except Exception as e:
+                    if sol_x:
+                        for j, sol in enumerate(sol_x):
                             try:
-                                if "=" in expr_str:
-                                    left_str, right_str = expr_str.split("=")
-                                    expr = sp.sympify(right_str, locals={'x': self.x, 'y': self.y}) - sp.sympify(left_str, locals={'x': self.x, 'y': self.y})
-                                    sol_y = sp.solve(expr, self.y)
-                                    if sol_y:
-                                        num=1
-                                        for sol in sol_y:
-                                            # تبدیل تقسیم‌ها به صورت ضرب در توان منفی
-                                            sol_rewritten = sol.rewrite(sp.Pow)
-                                            func = sp.lambdify(self.x, sol, 'numpy')
-                                            y_vals = func(x_vals)
-                                            ax.plot(x_vals, y_vals, label=f"{line['name']}: y = {f"${sp.latex(sol_rewritten)}$"}")
-                                            num+=1
-                            except:         
-                                st.error("Error in curve plotting: " + str(e))
-                    else:
-                        y_vals = m_line * x_vals + b_line
-                        ax.plot(x_vals, y_vals, label=f"{line['name']}: y = {m_line:.2f}x + {b_line:.2f}")
+                                sol_rewritten = sol.rewrite(sp.Pow)
+                                func = sp.lambdify(self.y, sol, 'numpy')
+                                y_range = np.linspace(y_min, y_max, 400)
+                                x_vals_sol = func(y_range)
+                                x_real = np.real_if_close(x_vals_sol)
+                                mask = np.isreal(x_real) & np.isfinite(x_real)
+                                color = colors[(i + j) % len(colors)]
+                                ax.plot(x_real[mask], y_range[mask], color=color, 
+                                        label=f"{line['name']} - x{j+1}: x = ${sp.latex(sol_rewritten)}$")
+                            except Exception as e:
+                                st.warning(f"خطا در رسم جواب x{j+1} معادله {line['name']}: {e}")
 
-            # محاسبه تقاطع‌ها
-            n = len(st.session_state.registered_lines)
-            for i in range(n):
-                for j in range(i + 1, n):
-                    line_i = st.session_state.registered_lines[i]
-                    line_j = st.session_state.registered_lines[j]
-                    if line_i.get("type", "linear") == "linear" and line_j.get("type", "linear") == "linear":
-                        m1 = line_i["m"]
-                        b1 = line_i["b"]
-                        m2 = line_j["m"]
-                        b2 = line_j["b"]
-                        if m1 is not None and m2 is not None and abs(m1 - m2) > 1e-9:
-                            x_int = (b2 - b1) / (m1 - m2)
-                            y_int = m1 * x_int + b1
+                    # رسم ضمنی برای ریشه‌های غیرحقیقی
+                    f = sp.lambdify((self.x, self.y), expr, 'numpy')
+                    color = colors[i % len(colors)]
+                    ax.contour(x_vals_grid.ravel(), y_vals_grid.ravel(), f(x_vals_grid, y_vals_grid), [0], colors=color, linestyles='dashed')
+                    ax.plot([], [], color=color, linestyle='dashed', label=f"{line['name']} : {line['input']}")
+
+                except Exception as e:
+                    st.error(f"خطا در رسم معادله {line['name']}: {e}")
+
+            else:
+                m_line = line.get("m", None)
+                b_line = line.get("b", None)
+                if m_line is None or b_line is None:
+                    expr_str = line["input"]
+                    if expr_str.lower().startswith("y="):
+                        expr_str = expr_str[2:]
+                    try:
+                        func = sp.lambdify(self.x, sp.sympify(expr_str, locals={'x': self.x, 'y': self.y}), 'numpy')
+                        y_vals = func(x_vals)
+                        ax.plot(x_vals, y_vals, label=f"{line['name']}: {line['input']}")
+                    except Exception as e:
+                        try:
+                            if "=" in expr_str:
+                                left_str, right_str = expr_str.split("=")
+                                expr = sp.sympify(right_str, locals={'x': self.x, 'y': self.y}) - sp.sympify(left_str, locals={'x': self.x, 'y': self.y})
+                                sol_y = sp.solve(expr, self.y)
+                                if sol_y:
+                                    for j, sol in enumerate(sol_y):
+                                        sol_rewritten = sol.rewrite(sp.Pow)
+                                        func = sp.lambdify(self.x, sol, 'numpy')
+                                        y_vals = func(x_vals)
+                                        ax.plot(x_vals, y_vals, label=f"{line['name']} - {j+1}: y = ${sp.latex(sol_rewritten)}$")
+                        except:
+                            st.error("Error in curve plotting: " + str(e))
+                else:
+                    y_vals = m_line * x_vals + b_line
+                    ax.plot(x_vals, y_vals, label=f"{line['name']}: y = {m_line:.2f}x + {b_line:.2f}")
+
+        # محاسبه تقاطع‌ها برای همه انواع خطوط
+        n = len(equations)
+        for i in range(n):
+            for j in range(i + 1, n):
+                line_i = equations[i]
+                line_j = equations[j]
+                try:
+                    # پردازش معادلات
+                    expr_str_i = line_i["input"].replace('^', '**')
+                    expr_str_j = line_j["input"].replace('^', '**')
+                    transformations = standard_transformations + (implicit_multiplication_application,)
+                    if "=" in expr_str_i:
+                        left_str_i, right_str_i = expr_str_i.split("=")
+                        left_expr_i = parse_expr(left_str_i, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                        right_expr_i = parse_expr(right_str_i, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                        expr_i = sp.simplify(left_expr_i - right_expr_i)
+                    else:
+                        expr_i = parse_expr(expr_str_i, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+
+                    if "=" in expr_str_j:
+                        left_str_j, right_str_j = expr_str_j.split("=")
+                        left_expr_j = parse_expr(left_str_j, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                        right_expr_j = parse_expr(right_str_j, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                        expr_j = sp.simplify(left_expr_j - right_expr_j)
+                    else:
+                        expr_j = parse_expr(expr_str_j, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+
+                    # حل سیستم معادلات برای یافتن تقاطع
+                    solutions = sp.solve([expr_i, expr_j], (self.x, self.y), dict=True)
+                    for sol in solutions:
+                        x_int = float(sol[self.x])
+                        y_int = float(sol[self.y])
+                        # بررسی اینکه تقاطع در دامنه باشد
+                        if x_min <= x_int <= x_max and y_min <= y_int <= y_max:
                             letter = chr(ord('a') + letter_index)
                             letter_index += 1
                             intersections.append({
@@ -258,14 +375,43 @@ class LineAlgorithm:
                             ax.plot(x_int, y_int, 'ro')
                             ax.annotate(letter, (x_int, y_int), textcoords="offset points", xytext=(5, 5),
                                         color='red', fontsize=10)
-            
-            # اضافه کردن خطوط محورها
-            ax.axhline(0, color='black', linewidth=0.5)
-            ax.axvline(0, color='black', linewidth=0.5)
-            ax.set_xlabel("x")
-            ax.set_ylabel("y")
-            ax.legend(fontsize='small', loc='best')
-            return fig
+                except Exception as e:
+                    # استفاده از حل عددی اگر حل تحلیلی ناموفق بود
+                    try:
+                        def f(xy):
+                            x_val, y_val = xy
+                            return [
+                                float(expr_i.subs({self.x: x_val, self.y: y_val})),
+                                float(expr_j.subs({self.x: x_val, self.y: y_val}))
+                            ]
+                        # حدس اولیه در مرکز دامنه
+                        x_guess = (x_min + x_max) / 2
+                        y_guess = (y_min + y_max) / 2
+                        sol = sp.nsolve([expr_i, expr_j], [self.x, self.y], [x_guess, y_guess])
+                        x_int, y_int = float(sol[0]), float(sol[1])
+                        if x_min <= x_int <= x_max and y_min <= y_int <= y_max:
+                            letter = chr(ord('a') + letter_index)
+                            letter_index += 1
+                            intersections.append({
+                                "letter": letter,
+                                "line1": line_i["name"],
+                                "line2": line_j["name"],
+                                "x": x_int,
+                                "y": y_int
+                            })
+                            ax.plot(x_int, y_int, 'ro')
+                            ax.annotate(letter, (x_int, y_int), textcoords="offset points", xytext=(5, 5),
+                                        color='red', fontsize=10)
+                    except Exception as e:
+                        st.warning(f"خطا در محاسبه تقاطع بین {line_i['name']} و {line_j['name']}: {e}")
+
+        # اضافه کردن خطوط محورها
+        ax.axhline(0, color='black', linewidth=0.5)
+        ax.axvline(0, color='black', linewidth=0.5)
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.legend(fontsize='small', loc='best')
+        return fig
     def calculate_from_points(self, point1, point2):
         # ایجاد معادله از روی نقطه
         x1, y1 = point1
