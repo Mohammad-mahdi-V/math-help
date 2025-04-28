@@ -3297,3 +3297,4 @@ class App:
 if __name__ == "__main__":
     global benchmark
     App()
+#اجرا برنامه
