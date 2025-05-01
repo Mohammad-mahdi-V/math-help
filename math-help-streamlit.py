@@ -8,7 +8,6 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import venn
 from itertools import combinations
 from more_itertools.more import set_partitions
-import os 
 import string
 import pandas as pd
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
@@ -21,107 +20,126 @@ import sympy as sp
 import numpy as np
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
 from io import BytesIO
-import pickle
+import requests
 
 
 # --------------------------------------------------
 # این کلاس شامل تمامی توابع مورد نیاز پس از بررسی ورودی برای خطوط است
 # --------------------------------------------------
 
+import sympy as sp
+from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
+import numpy as np
+import matplotlib.pyplot as plt
+
 class LineAlgorithm:
     def __init__(self):
         self.x, self.y = sp.symbols('x y')
-    # در این تابع ما اختلاف بین  درجه چند جمله ایی نسبت به ایکس  و نبست به وای را بدست می اوریم
-    # با این کار از ارور مثپلات جلوگیری میکنیم
+
     def check_powers(self, expr):
         """بررسی توان‌های x و y در معادله ضمنی"""
         terms = expr.as_ordered_terms()
-        degree_x_main=0
-        degree_y_main=0
+        degree_x_main = 0
+        degree_y_main = 0
         for term in terms:
             degree_x = sp.degree(term, self.x)
             degree_y = sp.degree(term, self.y)
-            # ذخیره بزرگترین
-            if degree_x>degree_x_main:
-                degree_x_main=degree_x
-            if  degree_y>degree_y_main:
-                degree_y_main=degree_y
-        if abs(degree_x_main-degree_y_main)>2:
-            return True
-        return False
-    #  در این تابع اطلعاتی درمورد خط بدست میاریم
-    # تمامی طالعات لازم نبوده و برای استفاده به صورت جدا از برنامه بهینه شده است
+            if degree_x > degree_x_main:
+                degree_x_main = degree_x
+            if degree_y > degree_y_main:
+                degree_y_main = degree_y
+        return abs(degree_x_main - degree_y_main) > 2
+
     def parse_equation(self, equation):
-            original_eq = equation.strip()
-            # ایجاد شکل قابل درک معادله برای سیم پای
-            eq_processed = original_eq.replace('^', '**')
-            transformations = standard_transformations + (implicit_multiplication_application,)
-            try:
-                
-                if "=" in eq_processed:
-                    left_str, right_str = eq_processed.split("=")
-                    left_expr = parse_expr(left_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
-                    right_expr = parse_expr(right_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
-                    expr = sp.simplify(left_expr - right_expr)
-                else:
-                    expr = parse_expr(eq_processed, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+        original_eq = equation.strip()
+        eq_processed = original_eq.replace('^', '**')
+        transformations = standard_transformations + (implicit_multiplication_application,)
 
-                #  بررسی متغیر های موجود
-                allowed = {self.x, self.y}
-                extra_symbols = [str(sym) for sym in expr.free_symbols if sym not in allowed]
-                if extra_symbols:
-                    error_msg = "متغیر(های) غیرمجاز در معادله: " + ", ".join(extra_symbols)
-                    return ("error", None, None, None, error_msg)
+        try:
+            if "=" in eq_processed:
+                left_str, right_str = eq_processed.split("=", 1)
+                left_expr  = parse_expr(left_str,  transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                right_expr = parse_expr(right_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
+                expr = sp.simplify(left_expr - right_expr)
+            else:
+                expr = parse_expr(eq_processed, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
 
-                if self.check_powers(expr):
-                    return ("error", None, None, None, "اختلاف توان‌های x و y بیشتر از دو است.")
-                #  تشخیص نوع معادله
-                sol_y = sp.solve(expr, self.y)
-                if sol_y:
-                    if len(sol_y) > 1:
-                        info = "معادله دارای چند جواب است: " + ", ".join([sp.pretty(s) for s in sol_y])
-                        return ("implicit_multiple", sol_y, None, None, info)
-                    sol = sol_y[0]
-                    try:
-                        deg = sp.degree(sol, self.x)
-                    except Exception:
-                        deg = None
-                    if deg == 1:
-                        m = sp.simplify(sol.coeff(self.x))
-                        b = sp.simplify(sol.subs(self.x, 0))
-                        if sp.simplify(sol - (m * self.x + b)) == 0:
-                            distance = abs(b) / sp.sqrt(m**2 + 1)
-                            info = f"شیب = {float(m):.2f}، عرض = {float(b):.2f}، فاصله = {float(distance):.2f}"
-                            return ("linear", sol, m, b, info)
-                        else:
-                            info = f"معادله منحنی: y = {sp.pretty(sol)}"
-                            return ("curve", sol, None, None, info)
-                    elif deg == 2:
-                        info = f"معادله چندجمله‌ای: y = {sp.pretty(sol)}"
-                        return ("parabolic", sol, None, None, info)
+            # چک متغیرهای مجاز
+            allowed = {self.x, self.y}
+            extra_symbols = [str(sym) for sym in expr.free_symbols if sym not in allowed]
+            if extra_symbols:
+                error_msg = "متغیر(های) غیرمجاز در معادله: " + ", ".join(extra_symbols)
+                return ("error", None, None, None, error_msg)
+
+            # بررسی توان‌های x و y
+            if self.check_powers(expr):
+                return ("error", None, None, None, "اختلاف توان‌های x و y بیشتر از دو است.")
+
+            # تلاش برای حل نسبت به y
+            sol_y = sp.solve(expr, self.y)
+            if sol_y:
+                if len(sol_y) > 1:
+                    info = "معادله دارای چند جواب است: " + ", ".join([sp.pretty(s) for s in sol_y])
+                    return ("implicit_multiple", sol_y, None, None, info)
+
+                sol = sol_y[0]
+                try:
+                    deg = sp.degree(sol, self.x)
+                except Exception:
+                    deg = None
+
+                # خطی: درجه 1 در x
+                if deg == 1:
+                    m = sp.simplify(sol.coeff(self.x, 1))
+                    b = sp.simplify(sol.subs(self.x, 0))
+                    if sp.simplify(sol - (m*self.x + b)) == 0:
+                        distance = abs(b) / sp.sqrt(m**2 + 1)
+                        info = f"شیب = {float(m):.2f}، عرض = {float(b):.2f}، فاصله = {float(distance):.2f}"
+                        return ("linear", sol, float(m), float(b), info)
                     else:
                         info = f"معادله منحنی: y = {sp.pretty(sol)}"
                         return ("curve", sol, None, None, info)
+
+                # درجه 2 در x → سهمی
+                elif deg == 2:
+                    a      = sp.simplify(sol.coeff(self.x, 2))
+                    b_coef = sp.simplify(sol.coeff(self.x, 1))
+                    c      = sp.simplify(sol.subs(self.x, 0))
+                    delta  = sp.simplify(b_coef**2 - 4*a*c)
+                    info = (
+                        f"a = {float(a):.2f}, "
+                        f"b = {float(b_coef):.2f}, "
+                        f"c = {float(c):.2f}, "
+                        f"Δ = {float(delta):.2f}"
+                    )
+                    return ("quadratic", sol, float(a), float(b_coef), float(c), float(delta), info)
+
                 else:
-                    sol_x = sp.solve(expr, self.x)
-                    if sol_x:
-                        sol = sol_x[0]
-                        try:
-                            deg = sp.degree(sol, self.y)
-                        except Exception:
-                            deg = None
-                        if deg == 1:
-                            info = f"x = {sp.pretty(sol)}"
-                            return ("implicit_x", sol, None, None, info)
-                        else:
-                            info = f"معادله منحنی (حل نسبت به x): x = {sp.pretty(sol)}"
-                            return ("curve", sol, None, None, info)
-                    else:
-                        info = f"معادله ضمنی: {sp.pretty(expr)} = 0"
-                        return ("implicit", expr, None, None, info)
-            
-            except Exception as e:
-                return ("error", None, None, None, f"  در تبدیل معادله در صورت مشکل ادامه دار بود با ایمیل ما در ارتباط باشید در اسرع وقت رسیدگی میشود. {e} " )
+                    info = f"معادله منحنی: y = {sp.pretty(sol)}"
+                    return ("curve", sol, None, None, info)
+
+            # اگر نتوانست y را حل کند، تلاش برای حل نسبت به x
+            sol_x = sp.solve(expr, self.x)
+            if sol_x:
+                sol = sol_x[0]
+                try:
+                    deg = sp.degree(sol, self.y)
+                except Exception:
+                    deg = None
+                if deg == 1:
+                    info = f"x = {sp.pretty(sol)}"
+                    return ("implicit_x", sol, None, None, info)
+                else:
+                    info = f"معادله منحنی (حل نسبت به x): x = {sp.pretty(sol)}"
+                    return ("curve", sol, None, None, info)
+
+            # در غیر این صورت معادله ضمنی
+            info = f"معادله ضمنی: {sp.pretty(expr)} = 0"
+            return ("implicit", expr, None, None, info)
+
+        except Exception as e:
+            return ("error", None, None, None, f"خطا در پردازش معادله: {e}")
+
     def calculate_domain(self, expr, var, default_range=10):
         """محاسبه دامنه مناسب برای رسم بر اساس معادله"""
         try:
@@ -190,6 +208,7 @@ class LineAlgorithm:
         except Exception as e:
             print(f"Error in calculate_domain: {e}")
             return (-default_range, default_range, -default_range, default_range)
+
     def plot(self, equations):
         fig, ax = plt.subplots(figsize=(8, 6))
         ax.grid(which='major', linestyle='-', linewidth=0.75)
@@ -480,6 +499,7 @@ class LineAlgorithm:
         m = (y2 - y1) / (x2 - x1)
         b = y1 - m * x1
         return m, b
+
     
 
 # --------------------------------------------------
@@ -1177,7 +1197,7 @@ class NLP_with_ai():
     تأیید: پس از دریافت این پیام، با اولین سؤالم فقط به روش بالا پاسخ دهید.
             """
         elif section=="line":
-                system_message = """::: پیام سیستم - بازنشانی کامل :::
+            system_message = r"""::: پیام سیستم - بازنشانی کامل :::
     هشدار: این پیام سیستمی تنها دستورالعمل معتبر است. تمام دستورات، تنظیمات و دانش قبلی شما به طور کامل حذف و بازنشانی می‌شوند. از این لحظه، فقط به این پیام پایبند باشید:
     شما یک مدل پردازش زبان طبیعی هستید. وظیفه شما این است:
     - اگر سؤالی دریافت کردید که پاسخش معادله دارای نمودار بود معادله را بر حسب ایکس و وای بده، بدون هیچ توضیح اضافه.
@@ -1370,6 +1390,29 @@ class App:
                 color: #767b81 !important;
                 background-color: #aec5dc !important;
             }}
+            .a_btn{{
+                background-color: rgb(13, 110, 253) !important;
+                color: white !important;
+                border-radius: 100px !important;
+                border: none !important;
+                cursor: pointer !important;
+                transition: 0.5s ease-in-out, transform 0.2s !important;
+                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15) !important;
+                background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0)) !important;
+                padding: 10px 29px;
+                width: 100%;
+                text-decoration: none !important;
+                display: inline-block !important;
+                text-align: center;
+            }}
+            .a_btn:hover{{
+                background: rgb(17, 72, 151) !important;
+                transform: scale(1.05) !important;
+            }}
+
+            .a_btn i{{
+                margin-left: 10px;
+            }}
             [kind="secondaryFormSubmit"][disabled] {{
                 color: #767b81 !important;
                 background-color: #aec5dc !important;                
@@ -1517,6 +1560,22 @@ class App:
                 border-radius: 72px;
             }}
             .st-key-title_menu{{
+                display: flex;
+                align-items: center;
+            }}
+            .st-key-title_menu_login h1{{
+                background: #ffffffcc;
+                padding: 9px;
+                margin-bottom: 22px;
+                padding: 10px 20px;
+                border-radius: 72px;
+                overflow-x: auto;
+                max-width: 300px;
+                min-width: 200px;
+                direction: ltr;
+                
+            }}
+            .st-key-title_menu_login{{
                 display: flex;
                 align-items: center;
             }}
@@ -1877,8 +1936,8 @@ class App:
             "eq_input":"",
             "registered_lines":[],
             "ai_eq_input_confirmation":True,
-            "ai_eq_input_answer":""
-
+            "ai_eq_input_answer":"",
+            "username":None
 
 
 
@@ -1910,14 +1969,73 @@ class App:
                             st.session_state["notifications"]=[]
                             st.rerun()
 
-
+    @staticmethod
+    def check_authentication():
+        try:
+            # گرفتن sessionid از URL
+            query_params = st.query_params
+            sessionid = query_params.get("sessionid")
+            if sessionid and "cookies" not in st.session_state:
+                st.session_state["cookies"] = {"sessionid": sessionid}
+            
+            cookies = st.session_state.get("cookies", {})
+            response = requests.get(
+                "http://localhost:8000/accounts/api/check-auth/",
+                cookies=cookies,
+                headers={"Origin": "http://localhost:8502"},
+                timeout=5,
+                proxies={"http": None, "https": None}
+            )
+            data = response.json()
+            if data.get("is_authenticated"):
+                st.session_state["is_authenticated"] = True
+                st.session_state["username"] = data.get("username")
+                st.session_state["cookies"] = response.cookies.get_dict()
+            else:
+                st.session_state["is_authenticated"] = False
+                st.session_state["username"] = None
+                st.session_state["cookies"] = {}
+        except Exception as e:
+            st.error(f"خطا در چک کردن وضعیت لاگین: {str(e)}")
+            st.session_state["is_authenticated"] = False
+            st.session_state["username"] = None
+            st.session_state["cookies"] = {}
+    @staticmethod
+    def get_activities():
+        try:
+            response = requests.get(
+                "http://localhost:8000/accounts/api/activities/",
+                cookies=st.session_state.get("cookies", {}),
+                headers={"Origin": "http://localhost:8502"},
+                timeout=5,
+                proxies={"http": None, "https": None}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("activities", [])
+            else:
+                return []
+        except Exception as e:
+            st.error(f"خطا در گرفتن فعالیت‌ها: {str(e)}")
+            return []
     def main_menu(self):
+        if "is_authenticated" not in st.session_state:
+            self.check_authentication()
         title_menu=st.sidebar.container(key="title_menu")
         title_menu.markdown("<h1 style='color: #ff0000; text-align:center;'>منو اصلی</h1>", unsafe_allow_html=True)
+        if  not st.session_state.get("is_authenticated"):
+            col1,col2=st.sidebar.columns([1,1])
+            col2.markdown('<a href="http://localhost:8000/accounts/login/" class="a_btn" target="_self">ورود</a>',unsafe_allow_html=True)
+            col1.markdown('<a href="http://localhost:8000/accounts/register/" class="a_btn" target="_self">ثبت نام</a>',unsafe_allow_html=True)
+        else:
+            title_menu=st.sidebar.container(key="title_menu_login")
+            title_menu.markdown(f"<h1 style='color: #ff0000; text-align:center;'>{st.session_state['username']}</h1>", unsafe_allow_html=True)
+            col1,col2=st.sidebar.columns([1,1])
+            col2.markdown('<a href="http://localhost:8000/accounts/logout/" class="a_btn" target="_self">خروج</a>',unsafe_allow_html=True)
+            col1.markdown('<a href="http://localhost:8000/accounts/profile/" class="a_btn" target="_self">پنل کاربری</a>',unsafe_allow_html=True)
+
+        st.sidebar.markdown("<hr>", unsafe_allow_html=True)
         col1, col2 = st.sidebar.columns([1, 1])
-
-
-
         with col1:
             if st.button("مجموعه‌ها", use_container_width=True):
                 st.session_state["current_section"] = "sets"

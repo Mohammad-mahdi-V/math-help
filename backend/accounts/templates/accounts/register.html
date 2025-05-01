@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ثبت‌نام</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
+        .form-container { max-width: 400px; margin: auto; padding: 20px; border: 1px solid #ccc; }
+        input { width: 100%; padding: 8px; margin: 10px 0; }
+        button { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <h2>ثبت‌نام</h2>
+        <form method="post" action="{% url 'register' %}">
+            {% csrf_token %}
+            <input type="text" name="username" placeholder="نام کاربری" required>
+            <input type="email" name="email" placeholder="ایمیل" required>
+            <input type="password" name="password" placeholder="رمز عبور" required>
+            <button type="submit">ثبت‌نام</button>
+        </form>
+        {% if error %}
+            <p style="color: red;">{{ error }}</p>
+        {% endif %}
+    </div>
+</body>
+</html>
