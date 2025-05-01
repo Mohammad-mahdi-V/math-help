@@ -1,27 +1,58 @@
 <!DOCTYPE html>
-<html>
+<html lang="fa">
 <head>
-    <title>ثبت‌نام</title>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
-        .form-container { max-width: 400px; margin: auto; padding: 20px; border: 1px solid #ccc; }
-        input { width: 100%; padding: 8px; margin: 10px 0; }
-        button { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; }
-    </style>
+  <meta charset="UTF-8">
+  <title>ورود</title>
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/style-login.css' %}">
 </head>
 <body>
-    <div class="form-container">
-        <h2>ثبت‌نام</h2>
-        <form method="post" action="{% url 'register' %}">
-            {% csrf_token %}
-            <input type="text" name="username" placeholder="نام کاربری" required>
+  <div class="box box-signup">
+    <div class="login">
+      <form method="post" action="{% url 'register' %}">
+        {% csrf_token %}
+        <div class="loginBx sginupBX">
+          <h2>ثبت نام</h2>
+
+          <div class="input-container">
+            <input type="text"name="username" placeholder="نام کاربری" id="username">
+          </div>
+          <div class="input-container">
             <input type="email" name="email" placeholder="ایمیل" required>
-            <input type="password" name="password" placeholder="رمز عبور" required>
-            <button type="submit">ثبت‌نام</button>
-        </form>
-        {% if error %}
-            <p style="color: red;">{{ error }}</p>
-        {% endif %}
+          </div>
+          <div class="input-container">
+            <input type="password" name="password" placeholder="رمز عبور" id="password">
+            <i class="fa fa-eye" id="togglePassword" onclick="togglePassword()"></i>
+          </div>
+
+          <input type="submit" value="ارسال" />
+
+          <div class="group">
+            <a href="../login">حساب دارم  </a>
+          </div>
+
+          <div class="info">
+            {% if error %}
+            <p>{{ error }}</p>
+            {% endif %}          
+          </div>
+        </div>
+      </form>
     </div>
+  </div>
+
+  <script>
+    function togglePassword() {
+      const passwordInput = document.getElementById('password');
+      const icon = document.getElementById('togglePassword');
+
+      const isPassword = passwordInput.type === "password";
+      passwordInput.type = isPassword ? "text" : "password";
+      icon.classList = isPassword ? "fa fa-eye-slash" : "fa fa-eye";
+    }
+  </script>
 </body>
 </html>
