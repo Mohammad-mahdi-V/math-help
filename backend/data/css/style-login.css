@@ -1,0 +1,237 @@
+@font-face {
+  font-family: 'YekanBakhFaNum';
+  src: url(/data/font/YekanBakhFaNum-Fat.woff2) format('woff2');
+  font-weight: 900;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'YekanBakhFaNum';
+  src: url(../font/YekanBakhFaNum-Bold.woff2) format('woff2');
+  font-weight: bold;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'YekanBakhFaNum';
+  src: url(../font/YekanBakhFaNum-Heavy.woff2) format('woff2');
+  font-weight: 800;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'YekanBakhFaNum';
+  src: url(../font/YekanBakhFaNum-Light.woff2) format('woff2');
+  font-weight: 300;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'YekanBakhFaNum';
+  src: url(../font/YekanBakhFaNum-Medium.woff2) format('woff2');
+  font-weight: 500;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'YekanBakhFaNum';
+  src: url(../font/YekanBakhFaNum-Regular.woff2) format('woff2');
+  font-weight: normal;
+  font-style: normal;
+}
+body {
+display: flex;
+justify-content: center;
+align-items: center;
+min-height: 100vh;
+background: #bfe1ff;
+}
+
+* {
+font-family: "YekanBakhFaNum";
+direction: rtl;
+font-size: 25px;
+}
+
+@property --a {
+syntax: "<angle>";
+inherits: false;
+initial-value: 0deg;
+}
+
+.box {
+position: relative;
+width: 400px;
+height: 200px;
+background: repeating-conic-gradient(from var(--a), #81b8ee 0%, #6fd6ff 5%, transparent 5%, transparent 40%, #27aaff 50%);
+filter: drop-shadow(0 15px 50px #000);
+border-radius: 20px;
+animation: rotating 4s linear infinite;
+display: flex;
+justify-content: center;
+align-items: center;
+transition: 0.5s;
+}
+
+@keyframes rotating {
+0% {
+  --a: 0deg;
+}
+
+0% {
+  --a: 360deg;
+}
+}
+
+.box::before {
+content: "";
+position: absolute;
+width: 100%;
+height: 100%;
+background: repeating-conic-gradient(from var(--a), #002255 0%, #00205d 5%, transparent 5%, transparent 40%, #002652 50%);
+filter: drop-shadow(0 15px 50px #000);
+border-radius: 20px;
+animation: rotating 4s linear infinite;
+animation-delay: -1s;
+}
+
+.box::after {
+content: "";
+position: absolute;
+inset: 4px;
+background: #9ed7f6;
+border-radius: 15px;
+border: 8px solid #004a85;
+}
+
+.box:hover {
+width: 464px;
+height: 708px;
+}
+.box-sgin:hover{
+  height: 750px;
+
+}
+.box:hover .login {
+inset: 20px;
+}
+
+.box:hover .loginBx {
+transform: translateY(0px);
+}
+.box:hover .info{
+  display: block;
+}
+form {
+  width: 100%;
+  flex-wrap: wrap;
+  display: flex;
+  justify-content: center;
+}
+.login {
+position: absolute;
+inset: 60px;
+display: flex;
+justify-content: center;
+align-items: center;
+flex-direction: column;
+border-radius: 10px;
+background: #a9ddff;
+color: #fff;
+z-index: 1000;
+box-shadow: inset 0 10px 20px #00000080;
+border-bottom: 2px solid #ffffff80;
+transition: 0.5s;
+overflow: hidden;
+}
+
+.loginBx {
+position: relative;
+display: flex;
+justify-content: center;
+align-items: center;
+flex-direction: column;
+gap: 20px;
+width: 70%;
+transform: translateY(172px);
+transition: 0.5s;
+}
+.sginBX{
+  transform: translateY(215px);
+
+}
+h2 {
+text-transform: uppercase;
+font-weight: 600;
+letter-spacing: 0.2em;
+}
+
+h2 i {
+color: #ff2770;
+text-shadow: 0 0 5px #ff2770, 0 0 20px #ff2770;
+}
+
+input {
+width: 100%;
+padding: 10px 20px;
+outline: none;
+border: none;
+font-size: 1em;
+color: #000000;
+background: #ebf6ff;
+border: 2px solid #c0efff;
+border-radius: 30px;
+}
+
+input::placeholder {
+color: #999;
+}
+
+input[type="submit"] {
+background: #002f57;
+border: none;
+font-weight: 500;
+color: #e9e6e6;
+cursor: pointer;
+transition: 0.5s;
+}
+
+input[type="submit"]:hover {
+box-shadow: 0 0 10px #73dbfe, 0 0 60px #3cbdee;
+}
+
+.group {
+width: 100%;
+display: flex;
+justify-content: space-between;
+}
+
+.group a {
+color: #1045aa;
+text-decoration: none;
+}
+
+.group a:nth-child(2) {
+color: #060291;
+font-weight: 600;
+}
+
+
+.input-container {
+  position: relative;
+  margin-bottom: 15px;
+  display: flex;
+}
+
+
+.input-container i {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #888;
+  cursor: pointer;
+}
+
+
+.info {
+  text-align: center;
+  color: red;
+  margin-top: 10px;
+  display: none;
+}
