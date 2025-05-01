@@ -122,33 +122,74 @@ class LineAlgorithm:
             
             except Exception as e:
                 return ("error", None, None, None, f"  در تبدیل معادله در صورت مشکل ادامه دار بود با ایمیل ما در ارتباط باشید در اسرع وقت رسیدگی میشود. {e} " )
-
     def calculate_domain(self, expr, var, default_range=10):
         """محاسبه دامنه مناسب برای رسم بر اساس معادله"""
         try:
-            # تلاش برای پیدا کردن ریشه‌ها یا نقاط بحرانی
-            if var == self.x:
-                sol = sp.solve(expr, self.x)
-            else:
-                sol = sp.solve(expr, self.y)
-            real_sols = [float(s) for s in sol if s.is_real and s.is_finite]
-            if real_sols:
-                min_val = min(real_sols) - 2  # حاشیه اضافه
-                max_val = max(real_sols) + 2
-                return min(min_val, -default_range), max(max_val, default_range)
-            # اگر ریشه‌ای نبود، از مشتق برای یافتن نقاط بحرانی استفاده کن
-            deriv = sp.diff(expr, var)
-            critical_points = sp.solve(deriv, var)
-            real_critical = [float(p) for p in critical_points if p.is_real and p.is_finite]
-            if real_critical:
-                min_val = min(real_critical) - 2
-                max_val = max(real_critical) + 2
-                return min(min_val, -default_range), max(max_val, default_range)
-            # دامنه پیش‌فرض
-            return -default_range, default_range
-        except:
-            return -default_range, default_range
+            # مقدار پیش‌فرض برای دامنه‌ها
+            x_range = default_range
+            y_range = default_range
+            x_min, x_max = -x_range, x_range
+            y_min, y_max = -y_range, y_range
 
+            # بررسی اینکه آیا معادله به شکل x = f(y) است
+            if var == self.x and self.y in expr.free_symbols:
+                sol_x = sp.solve(expr, self.x)
+                if sol_x:  # اگر بتوان x را به صورت تابعی از y حل کرد
+                    func = sp.lambdify(self.y, sol_x[0], 'numpy')
+                    # تنظیم دامنه برای y
+                    y_range = default_range * 5  # دامنه بزرگتر برای y
+                    y_vals = np.linspace(-y_range, y_range, 200)
+                    x_vals = func(y_vals)
+                    x_vals = x_vals[np.isfinite(x_vals)]  # حذف مقادیر غیرمعتبر
+                    if len(x_vals) > 0:
+                        x_min, x_max = np.min(x_vals), np.max(x_vals)
+                        # تنظیم حاشیه
+                        x_margin = (x_max - x_min) * 0.1
+                        y_margin = (y_range * 2) * 0.1
+                        return (x_min - x_margin, x_max + x_margin, -y_range - y_margin, y_range + y_margin)
+
+            # بررسی اینکه آیا معادله به شکل y = f(x) است
+            if var == self.x and self.y in expr.free_symbols:
+                sol_y = sp.solve(expr, self.y)
+                if sol_y:
+                    func = sp.lambdify(self.x, sol_y[0], 'numpy')
+                    x_range = default_range
+                    x_vals = np.linspace(-x_range, x_range, 200)
+                    y_vals = func(x_vals)
+                    y_vals = y_vals[np.isfinite(y_vals)]
+                    if len(y_vals) > 0:
+                        y_min, y_max = np.min(y_vals), np.max(y_vals)
+                        x_margin = x_range * 0.1
+                        y_margin = (y_max - y_min) * 0.1
+                        return (-x_range - x_margin, x_range + x_margin, y_min - y_margin, y_max + y_margin)
+
+            # تلاش برای تخمین دامنه با ارزیابی عددی معادله ضمنی
+            if self.x in expr.free_symbols and self.y in expr.free_symbols:
+                f = sp.lambdify((self.x, self.y), expr, 'numpy')
+                x_vals = np.linspace(-default_range, default_range, 50)
+                y_vals = np.linspace(-default_range * 5, default_range * 5, 50)
+                x_vals_mesh, y_vals_mesh = np.meshgrid(x_vals, y_vals)
+                z_vals = f(x_vals_mesh, y_vals_mesh)
+                z_vals = z_vals[np.isfinite(z_vals)]
+                if len(z_vals) > 0:
+                    # پیدا کردن نقاطی که معادله تقریباً صفر است
+                    mask = np.abs(z_vals) < 1e-2
+                    if np.any(mask):
+                        x_points = x_vals_mesh[mask]
+                        y_points = y_vals_mesh[mask]
+                        if len(x_points) > 0 and len(y_points) > 0:
+                            x_min, x_max = np.min(x_points), np.max(x_points)
+                            y_min, y_max = np.min(y_points), np.max(y_points)
+                            x_margin = (x_max - x_min) * 0.1 or default_range * 0.1
+                            y_margin = (y_max - y_min) * 0.1 or default_range * 0.1
+                            return (x_min - x_margin, x_max + x_margin, y_min - y_margin, y_max + y_margin)
+
+            # اگر هیچ‌کدام از موارد بالا جواب نداد، دامنه پیش‌فرض
+            return (-default_range, default_range, -default_range, default_range)
+
+        except Exception as e:
+            print(f"Error in calculate_domain: {e}")
+            return (-default_range, default_range, -default_range, default_range)
     def plot(self, equations):
         fig, ax = plt.subplots(figsize=(8, 6))
         ax.grid(which='major', linestyle='-', linewidth=0.75)
@@ -171,20 +212,33 @@ class LineAlgorithm:
             else:
                 expr = parse_expr(expr_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
 
-            x_min_line, x_max_line = self.calculate_domain(expr, self.x)
-            y_min_line, y_max_line = self.calculate_domain(expr, self.y)
+            result_x = self.calculate_domain(expr, self.x)
+            if len(result_x) == 4:
+                x_min_line, x_max_line, y_min_line, y_max_line = result_x
+            else:
+                x_min_line, x_max_line = result_x
+                result_y = self.calculate_domain(expr, self.y)
+                if len(result_y) == 4:
+                    _, _, y_min_line, y_max_line = result_y
+                else:
+                    y_min_line, y_max_line = result_y
+
             x_min = min(x_min, x_min_line)
             x_max = max(x_max, x_max_line)
             y_min = min(y_min, y_min_line)
             y_max = max(y_max, y_max_line)
 
 
+        # تنظیم محورها
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
         if not all(isinstance(v, (int, float)) for v in [x_min, x_max, y_min, y_max]):
             raise ValueError(f"Invalid domain values: x_min={x_min}, x_max={x_max}, y_min={y_min}, y_max={y_max}")
-
-        x_vals = np.linspace(x_min, x_max, 400)
-        y_vals_grid, x_vals_grid = np.ogrid[y_min:y_max:200j, x_min:x_max:200j]
-
+        if "x" and "y" in expr_str:
+            x_vals = np.linspace(x_min, x_max, 400)
+            y_vals_grid, x_vals_grid = np.ogrid[y_min:y_max:200j, x_min:x_max:200j]
+        else:
+            x_vals_mesh, y_vals_mesh = np.meshgrid(np.linspace(x_min, x_max, 200), np.linspace(y_min, y_max, 200))
         for i, line in enumerate(equations):
             if line.get("type", "linear") in ["general", "quadratic"]:
                 if line["type"] == "general":
@@ -209,6 +263,7 @@ class LineAlgorithm:
 
             elif line["type"] == "implicit" or line["type"] == "parabolic":
                 expr = line["input"].replace('^', '**')
+                expr_str=expr
                 transformations = standard_transformations + (implicit_multiplication_application,)
                 if "=" in expr:
                     left_str, right_str = expr.split("=", 1)
@@ -219,7 +274,10 @@ class LineAlgorithm:
                     expr = parse_expr(expr, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
                 f = sp.lambdify((self.x, self.y), expr, 'numpy')
                 color = colors[i % len(colors)]
-                ax.contour(x_vals_grid.ravel(), y_vals_grid.ravel(), f(x_vals_grid, y_vals_grid), [0], colors=color)
+                if "x" and "y" in expr_str:
+                    ax.contour(x_vals_grid.ravel(), y_vals_grid.ravel(), f(x_vals_grid, y_vals_grid), [0], colors=color)
+                else:
+                    ax.contour(x_vals_mesh, y_vals_mesh, f(x_vals_mesh, y_vals_mesh), [0], colors=color)
                 ax.plot([], [], color=color, label=f"{line['name']}: {line['input']}")
 
             elif line["type"] == "implicit_multiple":
@@ -269,8 +327,7 @@ class LineAlgorithm:
                                 y_real = np.real_if_close(y_vals)
                                 mask = np.isreal(y_real) & np.isfinite(y_real)
                                 color = colors[(i + j) % len(colors)]
-                                ax.plot(x_vals[mask], y_real[mask], color=color, 
-                                        label=f"{line['name']} - y{j+1}: y = ${sp.latex(sol_rewritten)}$")
+                                ax.plot(x_vals[mask], y_real[mask], color=color)
                             except Exception as e:
                                 st.warning(f"خطا در رسم جواب y{j+1} معادله {line['name']}: {e}")
 
@@ -284,15 +341,22 @@ class LineAlgorithm:
                                 x_real = np.real_if_close(x_vals_sol)
                                 mask = np.isreal(x_real) & np.isfinite(x_real)
                                 color = colors[(i + j) % len(colors)]
-                                ax.plot(x_real[mask], y_range[mask], color=color, 
-                                        label=f"{line['name']} - x{j+1}: x = ${sp.latex(sol_rewritten)}$")
+                                ax.plot(x_real[mask], y_range[mask], color=color)
                             except Exception as e:
                                 st.warning(f"خطا در رسم جواب x{j+1} معادله {line['name']}: {e}")
 
                     f = sp.lambdify((self.x, self.y), expr, 'numpy')
                     color = colors[i % len(colors)]
-                    ax.contour(x_vals_grid.ravel(), y_vals_grid.ravel(), f(x_vals_grid, y_vals_grid), [0], colors=color, linestyles='dashed')
-                    ax.plot([], [], color=color, linestyle='dashed', label=f"{line['name']} (ضمنی): {line['input']}")
+                    try:
+                        if "x" and "y" in expr_str:
+                            ax.contour(x_vals_grid.ravel(), y_vals_grid.ravel(), f(x_vals_grid, y_vals_grid), [0], colors=color)
+                        else:
+                            ax.contour(x_vals_mesh, y_vals_mesh, f(x_vals_mesh, y_vals_mesh), [0], colors=color)
+                    except:
+                        x_vals_mesh, y_vals_mesh = np.meshgrid(np.linspace(x_min, x_max, 200), np.linspace(y_min, y_max, 200))
+                        ax.contour(x_vals_mesh, y_vals_mesh, f(x_vals_mesh, y_vals_mesh), [0], colors=color)
+
+                    ax.plot([], [], color=color, linestyle='dashed', label=f"{line['name']} : {line['input']}")
 
                 except Exception as e:
                     st.error(f"خطا در رسم معادله {line['name']}: {str(e)}")
@@ -1122,6 +1186,9 @@ class NLP_with_ai():
     - پاسخ‌ها باید سریع، دقیق و بدون انحراف از این قوانین باشند.
     -معادله باید به زبان انگلسی نوشته شود
     -اعداد رو به صورت حروفی نباید بنویسی 
+    -term_pattern = r'-?\(?(?:\d{2}|\d*(?:\.\d+)?)\)?[xy]?(?:\^[0-9]+)?'
+    -operator_pattern = r'[\+\-\*/\^]'
+    -فرمت معادله به شکل بالا باشد
     -پاسخ  باید دقیق دقیق باشد  پس چندین بار فکر کن
     تأیید: پس از دریافت این پیام، با اولین سؤالم فقط به روش بالا پاسخ دهید."""
         self.NLP=init_chat_bot(other_system_message=system_message)
@@ -2761,7 +2828,7 @@ class App:
             if "x" not in self.eq_input and "y" not in (self.eq_input):
                 self.add_notification("معادله وارد شده باید حداقل شامل یکی از حروف ایکس و وای باشد")
                 return False
-            term_pattern = r'(?:\d+(?:\.\d+)?[xy]?|[xy])'
+            term_pattern = r'-?\(?(?:\d{2}|\d*(?:\.\d+)?)\)?[xy]?(?:\^[0-9]+)?'
             operator_pattern = r'[\+\-\*/\^]'
             expression_pattern = fr'^{term_pattern}({operator_pattern}{term_pattern})*$'
 
