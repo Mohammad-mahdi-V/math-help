@@ -1,37 +1,27 @@
 import streamlit as st
 import base64
 import time
-import threading
 import matplotlib.pyplot as plt
 from matplotlib_venn import venn2, venn3
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import venn
 from itertools import combinations
 from more_itertools.more import set_partitions
-import os 
 import string
 import pandas as pd
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
-from matplotlib.ticker import MultipleLocator
-import pandas as pd
 from google.generativeai.generative_models import GenerativeModel
 from google.generativeai.client import configure
 import re
 import sympy as sp
 import numpy as np
-from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
 from io import BytesIO
-import pickle
 
 
 # --------------------------------------------------
 # این کلاس شامل تمامی توابع مورد نیاز پس از بررسی ورودی برای خطوط است
 # --------------------------------------------------
 
-import sympy as sp
-from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
-import numpy as np
-import matplotlib.pyplot as plt
+
 
 class LineAlgorithm:
     def __init__(self):
@@ -43,14 +33,23 @@ class LineAlgorithm:
         degree_x_main = 0
         degree_y_main = 0
         for term in terms:
-            degree_x = sp.degree(term, self.x)
-            degree_y = sp.degree(term, self.y)
-            if degree_x > degree_x_main:
+            if term.is_polynomial(self.x):
+                degree_x = sp.degree(term, self.x)
+            else:
+                degree_x = None
+            if term.is_polynomial(self.y):
+                degree_y = sp.degree(term, self.y)
+            else:
+                degree_y = None
+            if degree_x is not None and degree_x > degree_x_main:
                 degree_x_main = degree_x
-            if degree_y > degree_y_main:
+            if degree_y is not None and degree_y > degree_y_main:
                 degree_y_main = degree_y
+        if degree_x_main <0:
+            degree_x_main = 0
+        if degree_y_main <0:
+            degree_y_main = 0
         return abs(degree_x_main - degree_y_main) > 2
-
     def parse_equation(self, equation):
         original_eq = equation.strip()
         eq_processed = original_eq.replace('^', '**')
@@ -167,20 +166,7 @@ class LineAlgorithm:
                         y_margin = (y_range * 2) * 0.1
                         return (x_min - x_margin, x_max + x_margin, -y_range - y_margin, y_range + y_margin)
 
-            # بررسی اینکه آیا معادله به شکل y = f(x) است
-            if var == self.x and self.y in expr.free_symbols:
-                sol_y = sp.solve(expr, self.y)
-                if sol_y:
-                    func = sp.lambdify(self.x, sol_y[0], 'numpy')
-                    x_range = default_range
-                    x_vals = np.linspace(-x_range, x_range, 200)
-                    y_vals = func(x_vals)
-                    y_vals = y_vals[np.isfinite(y_vals)]
-                    if len(y_vals) > 0:
-                        y_min, y_max = np.min(y_vals), np.max(y_vals)
-                        x_margin = x_range * 0.1
-                        y_margin = (y_max - y_min) * 0.1
-                        return (-x_range - x_margin, x_range + x_margin, y_min - y_margin, y_max + y_margin)
+            
 
             # تلاش برای تخمین دامنه با ارزیابی عددی معادله ضمنی
             if self.x in expr.free_symbols and self.y in expr.free_symbols:
@@ -207,7 +193,6 @@ class LineAlgorithm:
             return (-default_range, default_range, -default_range, default_range)
 
         except Exception as e:
-            print(f"Error in calculate_domain: {e}")
             return (-default_range, default_range, -default_range, default_range)
 
     def plot(self, equations):
@@ -233,20 +218,12 @@ class LineAlgorithm:
                 expr = parse_expr(expr_str, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
 
             result_x = self.calculate_domain(expr, self.x)
-            if len(result_x) == 4:
-                x_min_line, x_max_line, y_min_line, y_max_line = result_x
-            else:
-                x_min_line, x_max_line = result_x
-                result_y = self.calculate_domain(expr, self.y)
-                if len(result_y) == 4:
-                    _, _, y_min_line, y_max_line = result_y
-                else:
-                    y_min_line, y_max_line = result_y
+            x_min_line, x_max_line, y_min_line, y_max_line = result_x
 
-            x_min = min(x_min, x_min_line)
-            x_max = max(x_max, x_max_line)
-            y_min = min(y_min, y_min_line)
-            y_max = max(y_max, y_max_line)
+            x_min = float(np.real(min(x_min, x_min_line)))
+            x_max = float(np.real(max(x_max, x_max_line)))
+            y_min = float(np.real(min(y_min, y_min_line)))
+            y_max = float(np.real(max(y_max, y_max_line)))
 
 
         # تنظیم محورها
@@ -254,7 +231,7 @@ class LineAlgorithm:
         ax.set_ylim(y_min, y_max)
         if not all(isinstance(v, (int, float)) for v in [x_min, x_max, y_min, y_max]):
             raise ValueError(f"Invalid domain values: x_min={x_min}, x_max={x_max}, y_min={y_min}, y_max={y_max}")
-        if "x" and "y" in expr_str:
+        if "x" in expr_str and "y" in expr_str:
             x_vals = np.linspace(x_min, x_max, 400)
             y_vals_grid, x_vals_grid = np.ogrid[y_min:y_max:200j, x_min:x_max:200j]
         else:
@@ -294,7 +271,7 @@ class LineAlgorithm:
                     expr = parse_expr(expr, transformations=transformations, local_dict={'x': self.x, 'y': self.y})
                 f = sp.lambdify((self.x, self.y), expr, 'numpy')
                 color = colors[i % len(colors)]
-                if "x" and "y" in expr_str:
+                if "x" in expr_str and "y" in expr_str:
                     ax.contour(x_vals_grid.ravel(), y_vals_grid.ravel(), f(x_vals_grid, y_vals_grid), [0], colors=color)
                 else:
                     ax.contour(x_vals_mesh, y_vals_mesh, f(x_vals_mesh, y_vals_mesh), [0], colors=color)
@@ -368,7 +345,7 @@ class LineAlgorithm:
                     f = sp.lambdify((self.x, self.y), expr, 'numpy')
                     color = colors[i % len(colors)]
                     try:
-                        if "x" and "y" in expr_str:
+                        if "x" in expr_str and "y" in expr_str:
                             ax.contour(x_vals_grid.ravel(), y_vals_grid.ravel(), f(x_vals_grid, y_vals_grid), [0], colors=color)
                         else:
                             ax.contour(x_vals_mesh, y_vals_mesh, f(x_vals_mesh, y_vals_mesh), [0], colors=color)
