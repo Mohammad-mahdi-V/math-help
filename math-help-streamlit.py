@@ -45,16 +45,11 @@ class LineAlgorithm:
                 degree_x_main = degree_x
             if degree_y is not None and degree_y > degree_y_main:
                 degree_y_main = degree_y
-        if degree_x_main <0:
-            degree_x_main = 0
-        if degree_y_main <0:
-            degree_y_main = 0
         return abs(degree_x_main - degree_y_main) > 2
     def parse_equation(self, equation):
         original_eq = equation.strip()
         eq_processed = original_eq.replace('^', '**')
         transformations = standard_transformations + (implicit_multiplication_application,)
-
         try:
             if "=" in eq_processed:
                 left_str, right_str = eq_processed.split("=", 1)
@@ -166,7 +161,19 @@ class LineAlgorithm:
                         y_margin = (y_range * 2) * 0.1
                         return (x_min - x_margin, x_max + x_margin, -y_range - y_margin, y_range + y_margin)
 
-            
+            if var == self.y and self.x in expr.free_symbols:
+                sol_y = sp.solve(expr, self.y)
+                if sol_y:
+                    func = sp.lambdify(self.x, sol_y[0], 'numpy')
+                    x_range = default_range
+                    x_vals = np.linspace(-x_range, x_range, 200)
+                    y_vals = func(x_vals)
+                    y_vals = y_vals[np.isfinite(y_vals)]
+                    if len(y_vals) > 0:
+                        y_min, y_max = np.min(y_vals), np.max(y_vals)
+                        x_margin = x_range * 0.1
+                        y_margin = (y_max - y_min) * 0.1
+                        return (-x_range - x_margin, x_range + x_margin, y_min - y_margin, y_max + y_margin)
 
             # تلاش برای تخمین دامنه با ارزیابی عددی معادله ضمنی
             if self.x in expr.free_symbols and self.y in expr.free_symbols:
