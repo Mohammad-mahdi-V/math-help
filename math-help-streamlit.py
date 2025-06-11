@@ -537,13 +537,12 @@ class SetsAlgorithm:
         return True
     @staticmethod
     # امادگی برای ایوال
-
-
     def parse_set_string(s: str) -> str:
         """
         پردازش رشته ورودی مجموعه، تبدیل آن به فرمت قابل‌اجرا در eval
         - پرتاب استثنا در صورت مواجهه با کاراکتر نامعتبر بعد از عملگر
         """
+        
         def parse_expr(s: str, i: int):
             tokens = []
             while i < len(s):
@@ -800,7 +799,6 @@ class SetsAlgorithm:
         محاسبه ادونس با بررسی عمق متغیرهای موجود در عبارت.
         در این تابع:
         - ابتدا علائم ∩ و ∪ به معادل‌های Python تبدیل می‌شوند.
-        - متغیرهای داخل مجموعه‌ها با استفاده از fix_set_variables اصلاح می‌شوند.
         - عمق هر متغیر در عبارت محاسبه می‌شود. اگر متغیری یا در هیچ عمقی (یعنی خارج از {}) ظاهر شده باشد یا تعریف نشده باشد، خطا داده می‌شود.
         - در نهایت عبارت پردازش و نتیجه بازگردانده می‌شود.
         - اعتبارسنجی عبارت ورودی و مدیریت خطای کامل اضافه شده است.
@@ -840,6 +838,8 @@ class SetsAlgorithm:
     @staticmethod
     # تشخیص مجموعه های تو در تو
     def to_frozenset(obj):
+        if isinstance(obj, (set, frozenset)):
+            return frozenset(SetsAlgorithm.to_frozenset(x) for x in obj)
         return obj
     @staticmethod
     #  زیر مجموعه های یک مجموعه
@@ -868,7 +868,7 @@ class SetsAlgorithm:
                             subset.append(elements[j])
                     else:
                         yield subset
-            
+
             
             for subset in generate_subsets():
                 subset_str = SetsAlgorithm.set_to_str(set(subset))
@@ -1322,6 +1322,9 @@ class App:
                 filter: blur(1.5px);
 
             }}
+            .stAppHeader {{
+                display:none !important
+            }}
             [data-baseweb="modal"] [role="dialog"]{{
                 background:white;
             }}
@@ -1341,7 +1344,7 @@ class App:
                 font-family:'YekanBakhFaNum' !important;
                 font-weight:300 !important;
             }}
-
+            
             [kind="headerNoPadding"] {{
                 background-color: white;
             }}
@@ -2061,9 +2064,6 @@ class App:
                 self.display_eqs()
     def show_chatbot_section(self):
         import json
-        import time
-
-
         def is_line_math(line):
             line = line.strip()
             if not line:
