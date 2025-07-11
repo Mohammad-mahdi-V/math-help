@@ -20,6 +20,9 @@ https://www.aparat.com/jupyter_code
 =======
 # math-help
 مخزن اصلی بازگشت https://github.com/Jupyter-Code-ir/math-help
+مخزن دیگر
+https://github.com/Mohammad-mahdi-V/math-help
+<<<<<<< HEAD
 البته تمای کد ها و کامیت با استفاده از نسخه لوکال روی ریپو اپلود شده است
 >>>>>>> 89cdff0 (Update README.md)
 # مهم
