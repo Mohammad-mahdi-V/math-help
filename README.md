@@ -33,4 +33,5 @@ https://github.com/Mohammad-mahdi-V/math-help
 # مهم
 نسخه ایی که روی سرور هاکنینگ   منسوخ شده است 
 <<<<<<< HEAD
+<<<<<<< HEAD
 
