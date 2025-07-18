@@ -1203,6 +1203,7 @@ class NLP_with_ai():
             return self.NLP.send_message(prompt).text
         except:
             return self.NLP.send_message(prompt)
+
 #  برنامه اصلی
 class App:
 
