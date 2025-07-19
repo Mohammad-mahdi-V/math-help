@@ -7,16 +7,18 @@ import {
 import { motion ,AnimatePresence } from "framer-motion";
 import { useMemo, useState,useEffect} from 'react'
 
-export default function DataTable({ data, showDelete = true, onDelete, onSelect,maxHeight }) {
+export default function DataTable({ data, showDelete = true, onDelete, onSelect,maxHeight,maxW }) {
   const [selectedRowIndex, setSelectedRowIndex] = useState(null)
   const [isFirstLoad, setIsFirstLoad] = useState(true);
+
   const columns = useMemo(() => {
   const keys = Object.keys(data[0] || {})
   const tableCols = keys.map((key) => ({
       accessorKey: key,
       header: key,
       cell: ({ getValue }) => (
-        <span className="block max-w-[200px] overflow-auto text-nowrap   text-gray-100">
+        <span className="block  overflow-auto text-nowrap   text-gray-100" style={{ maxWidth: typeof maxW === 'number' ? `${maxW}px` : '200px' }}
+>
           {getValue()?.toString()}
         </span>
       ),
@@ -47,7 +49,7 @@ export default function DataTable({ data, showDelete = true, onDelete, onSelect,
       ),
     }
 
-    return [...tableCols, actionCol]
+    return [...tableCols, showDelete ? actionCol : null].filter(Boolean);
   }, [data, showDelete, onDelete, selectedRowIndex])
 
   const table = useReactTable({
@@ -58,11 +60,11 @@ export default function DataTable({ data, showDelete = true, onDelete, onSelect,
     getSortedRowModel: getSortedRowModel(),
   })
   useEffect(() => {
-      const timeout = setTimeout(() => setIsFirstLoad(false), 50); // بعد از 50 میلی‌ثانیه حالت بارگذاری اولیه رو خاموش کن
+      const timeout = setTimeout(() => setIsFirstLoad(false), 50);
       return () => clearTimeout(timeout);
     }, []);
   return (
-    <div className={`w-full overflow-auto  max-h-[${maxHeight}px]  p-4`}>
+    <div className="w-full overflow-auto    p-4" style={{ maxHeight: maxHeight ? `${maxHeight}px` : '400px' }}>
       <table className="w-full  text-white text-right border-separate border-spacing-y-3">
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
