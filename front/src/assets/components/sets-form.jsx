@@ -164,14 +164,14 @@ export default function SetsForm(props) {
         return res.json();
       })
       .then((data) => {
-        console.log(data);
-        const resultId = Date.now().toString(); // تولید ID منحصربه‌فرد
-        navigate(`/sets/result/${resultId}`, { state: { data,sets } }); // هدایت به صفحه نتایج
+          (data);
+        const resultId = Date.now().toString(); 
+        navigate(`/sets/result/${resultId}`, { state: { data,sets } }); 
       })
       .catch((err) => {
         console.error("خطا:", err);
         alert("خطایی در ارتباط با سرور رخ داد! لطفاً دوباره تلاش کنید");
-        navigate("/sets"); // بازگشت به فرم در صورت خطا
+        navigate("/sets"); 
       });
   }
 
@@ -296,7 +296,6 @@ export default function SetsForm(props) {
   return (
     <motion.div
       initial={{
-        borderRadius: 32,
         opacity: 0,
         scale: 0.9,
         backdropFilter: "blur(24px) brightness(0.5)",
@@ -307,12 +306,11 @@ export default function SetsForm(props) {
         backdropFilter: "blur(8px) brightness(1)",
       }}
       exit={{
-        borderRadius: 32,
         opacity: 0,
         scale: 0.9,
       }}
       transition={{ duration: 0.5 }}
-      className="relative mx-auto lg:max-w-[1024px] lg:top-30 top-50 shadow-sm shadow-black/20 backdrop-blur-sm backdrop-brightness-200"
+      className="relative mx-auto rounded-none lg:rounded-4xl lg:max-w-[1024px] lg:top-30 top-50 shadow-sm shadow-black/20 backdrop-blur-sm backdrop-brightness-200"
     >
       <div className="sets text-lg shadow-sm flex flex-wrap lg:flex-nowrap gap-12 p-5 lg:rounded-4xl shadow-black/20 bg-blue-950/20 backdrop-blur-sm backdrop-brightness-200 w-full">
         <div className="sets-form min-h-[326px] order-2 lg:order-1 w-full mx-auto max-w-[768px] lg:max-w-auto lg:w-7/12 h-full">
@@ -654,6 +652,8 @@ export default function SetsForm(props) {
                       onDelete={handleDelete}
                       onSelect={handleSelect}
                       maxHeight={326}
+                      enablePagination={false}
+
                     />
                   </motion.div>
                 )}
@@ -698,6 +698,7 @@ export default function SetsForm(props) {
                       showDelete={false}
                       onSelect={handleSelectDate}
                       maxHeight={326}
+                      enablePagination={false}
                     />
                   </motion.div>
                 )}
